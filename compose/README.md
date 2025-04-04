@@ -82,11 +82,11 @@ You are now ready to build your own testnet container images from source or pre-
   git clone git@github.com:cardano-foundation/antithesis.git
   ```
 
-- Create a copy of the `example` folder to a directory with your own testnet name
+- Create a copy of the `example_10.2.1` folder to a directory with your own testnet name
 
   ```
   cd antithesis/
-  cp -r example <mytestnet>
+  cp -r example_10.2.1 <mytestnet>
   cd <mytestnet>/
   ```
 
@@ -108,7 +108,7 @@ You are now ready to build your own testnet container images from source or pre-
   editor docker-compose.yaml
   ```
 
-> [!NOTE]
+> [!IMPORTANT]
 > Please make sure:
 >   - the number of pools match the `poolCount` defined in `testnet.yaml`
 >   - the correct dockerfile is specified (`Dockerfile.compiled` or `Dockerfile.source`)
@@ -127,6 +127,9 @@ You are now ready to build your own testnet container images from source or pre-
   ```
   make build testnet=example_10.2.1
   ```
+
+> [!IMPORTANT]
+> Any modifications to the `testnet.yaml` or `docker-compose.yaml` files require you to run the build command again.
 
 ## Run
 
@@ -215,7 +218,7 @@ You are now ready to build your own testnet container images from source or pre-
   for i in {1..3} ; do docker exec -ti p${i} jq -er '.PeerSharing' /opt/cardano-node/pools/${i}/configs/config.json; done
   ```
 
-> [!NOTE]
+> [!TIP]
 > The commands above assume a testnet of 3 pools, increase the `{1..3}` if needed.
 
 ## Appendix
