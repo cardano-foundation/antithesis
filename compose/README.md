@@ -85,7 +85,7 @@ You are now ready to build your own testnet container images from source or pre-
 - Create a copy of the `example_10.2.1` folder to a directory with your own testnet name
 
   ```
-  cd antithesis/
+  cd antithesis/testnets/
   cp -r example_10.2.1 <mytestnet>
   cd <mytestnet>/
   ```
@@ -130,6 +130,9 @@ You are now ready to build your own testnet container images from source or pre-
 
 > [!IMPORTANT]
 > Any modifications to the `testnet.yaml` or `docker-compose.yaml` files require you to run the build command again.
+
+> [!TIP]
+> Type `make help` for more information on the available commands.
 
 ## Run
 
