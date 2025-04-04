@@ -17,7 +17,7 @@ help:
 	@printf "  \033[34m%-30s\033[0m %s\n" recipients "Antithesis report recipients (recipients=john@example.com,peter@example.org)"
 	@printf "  \033[34m%-30s\033[0m %s\n" registry "Antithesis registry URL (registry=https://registry.example.com/tenant)"
 	@printf "  \033[34m%-30s\033[0m %s\n" testnet "testnet directory name (testnet=example_10.2.1)"
-	@printf "  \033[34m%-30s\033[0m %s\n" url "Antithesis API job URL (url=https://example.com/api/v1/launch/example)"
+	@printf "  \033[34m%-30s\033[0m %s\n" url "Antithesis API job URL (url=https://cardano.antithesis.com/api/v1/launch/cardano)"
 	@printf "  \033[34m%-30s\033[0m %s\n" username "Antithesis username (username=cardano)"
 	@echo
 	@echo "Commands:"
@@ -27,7 +27,6 @@ help:
 	@echo
 	@echo "Local run (execute in this order)"
 	@echo "  make build testnet=example_10.2.1"
-	@echo "  make push testnet=example_10.2.1"
 	@echo "  make up testnet=example_10.2.1"
 	@echo "  make query testnet=example_10.2.1"
 	@echo "  make down testnet=example_10.2.1"
