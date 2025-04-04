@@ -61,11 +61,14 @@ config_config_json() {
     # .AlonzoGenesisHash, .ByronGenesisHash, .ConwayGenesisHash, .ShelleyGenesisHash
     jq "del(.AlonzoGenesisHash, .ByronGenesisHash, .ConwayGenesisHash, .ShelleyGenesisHash)" "${CONFIG_JSON}" | write_file "${CONFIG_JSON}"
 
+    # .hasEKG
+    jq "del(.hasEKG)" "${CONFIG_JSON}" | write_file "${CONFIG_JSON}"
+
+    # .options.mapBackends
+    jq "del(.options.mapBackends)" "${CONFIG_JSON}" | write_file "${CONFIG_JSON}"
+
     # .minSeverity
     jq ".minSeverity = \"${MIN_SEVERITY^}\"" "${CONFIG_JSON}" | write_file "${CONFIG_JSON}"
-
-    # .hasEKG
-    jq ".hasEKG = ${EKG_PORT}" "${CONFIG_JSON}" | write_file "${CONFIG_JSON}"
 
     # .hasPrometheus
     jq ".hasPrometheus = [\"${PROMETHEUS_LISTEN}\", ${PROMETHEUS_PORT}]" "${CONFIG_JSON}" | write_file "${CONFIG_JSON}"
@@ -175,8 +178,7 @@ signal_ready() {
 }
 
 assemble_command() {
-    cmd=(exec)
-    cmd+=(/usr/local/bin/cardano-node)
+    cmd=(/usr/local/bin/cardano-node)
     cmd+=(run)
     cmd+=(--database-path ${DATABASE_PATH})
     cmd+=(--socket-path ${SOCKET_PATH})
@@ -202,6 +204,14 @@ main() {
     signal_ready &
     assemble_command
     "${cmd[@]}"
+    exit_code=$?
+    if [ ${exit_code} -eq 1 ]; then
+        echo "exit code: 0"
+        exit 0
+    else
+        echo "exit code: ${exit_code}"
+        exit ${?}
+    fi
 }
 
 main
