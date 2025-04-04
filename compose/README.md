@@ -114,6 +114,13 @@ You are now ready to build your own testnet container images from source or pre-
 >   - the correct dockerfile is specified (`Dockerfile.compiled` or `Dockerfile.source`)
 >   - the build arguments (`args`) are correct
 
+> [!CAUTION]
+> Please make sure the `image` **name** matches your testnet folder name. The format is: `image: url/name:tag`
+>
+> ```
+> image: us-central1-docker.pkg.dev/molten-verve-216720/cardano-repository/example_10.2.1:latest
+> ```
+
 ## Build
 
 - Change to the root directory of this Git repository
