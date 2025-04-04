@@ -4,7 +4,7 @@ SHELL := /bin/bash
 
 description="${testnet} run"
 duration=60
-recipients="karl.knutsson-ext@cardanofoundation.org,livio.kopp@cardanofoundation.org,arnaud.bailly-ext@cardanofoundation.org"
+recipients="antithesis@cardanofoundation.org"
 registry=us-central1-docker.pkg.dev/molten-verve-216720/cardano-repository
 testnet=
 url=https://cardano.antithesis.com/api/v1/launch/basic_test
