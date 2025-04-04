@@ -1,0 +1,56 @@
+---
+
+x-base: &base
+  image: us-central1-docker.pkg.dev/molten-verve-216720/cardano-repository/karknu_10.3.0_pre:latest
+  restart: on-failure
+  build:
+    context: "../../"
+    dockerfile: "Dockerfile.source"
+    args:
+      CARDANO_NODE_REF: "aniketd/release-10-3"
+
+x-env: &env
+  POOL_ID: "0" # Placeholder required for override
+
+services:
+  p1:
+    <<: *base
+    container_name: p1
+    hostname: p1.example
+    volumes:
+      - p1:/opt/cardano-node/data
+    ports:
+      - "3001:3001"
+    environment:
+      <<: *env
+      POOL_ID: "1"
+
+  p2:
+    <<: *base
+    container_name: p2
+    hostname: p2.example
+    volumes:
+      - p2:/opt/cardano-node/data
+    ports:
+      - "3002:3001"
+    environment:
+      <<: *env
+      POOL_ID: "2"
+      PEER_SHARING: "false"
+
+  p3:
+    <<: *base
+    container_name: p3
+    hostname: p3.example
+    volumes:
+      - p3:/opt/cardano-node/data
+    ports:
+      - "3003:3001"
+    environment:
+      <<: *env
+      POOL_ID: "3"
+
+volumes:
+  p1:
+  p2:
+  p3:

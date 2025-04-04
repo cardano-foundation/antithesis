@@ -1,0 +1,231 @@
+# compose
+
+## Index
+
+- [Information](#information)
+- [Installation](#installation)
+- [Plan](#plan)
+- [Build](#build)
+- [Run](#run)
+  - [Local Testing](#local-testing)
+  - [Antithesis Testing](#antithesis-testing)
+- [Troubleshoot](#troubleshoot)
+- [Appendix](#appendix)
+
+## Information
+
+This document describes the process of setting up a Cardano testnet from scratch. `cardano-node` can be compiled from source or downloaded as pre-compiled binary. The testnet will run inside of **Docker Containers** and will be controlled by **Docker Compose**.
+
+## Installation
+
+Docker is the only requirement to build and run your own testnets. The following instructions are tested on Debian 12:
+
+- Install dependencies via APT package manager
+
+  ```
+  sudo apt install --no-install-recommends \
+      ca-certificates \
+      curl \
+      make
+  ```
+
+- Add Docker APT repository public key
+
+  ```
+  sudo install -m 0755 -d /etc/apt/keyrings
+  sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+  sudo chmod a+r /etc/apt/keyrings/docker.asc
+  ```
+
+- Add Docker APT repository
+
+  ```
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+  ```
+
+- Refresh APT cache
+
+  ```
+  sudo apt update
+  ```
+
+- Install Docker
+
+  ```
+  sudo apt install --no-install-recommends \
+      docker-ce \
+      docker-ce-cli \
+      containerd.io \
+      docker-buildx-plugin \
+      docker-compose-plugin
+  ```
+
+- Add your user to the `docker` group
+
+  ```
+  sudo usermod --append --groups docker $(whoami)
+  ```
+
+- Pull and run the Docker test image
+
+  ```
+  docker run hello-world
+  ```
+
+You are now ready to build your own testnet container images from source or pre-compiled binary.
+
+## Plan
+
+- Clone the `antithesis.git` Git repository
+
+  ```
+  git clone git@github.com:cardano-foundation/antithesis.git
+  ```
+
+- Create a copy of the `example` folder to a directory with your own testnet name
+
+  ```
+  cd antithesis/
+  cp -r example <mytestnet>
+  cd <mytestnet>/
+  ```
+
+- Edit the `README.md` file to describe your test case and the version used
+
+  ```
+  editor README.md
+  ```
+
+- Modify the `testnet.yaml` file and insert your configuration details
+
+  ```
+  editor testnet.yaml
+  ```
+
+- Modify the `docker-compose.yaml` file to reflect your testnet defined above
+
+  ```
+  editor docker-compose.yaml
+  ```
+
+> [!NOTE]
+> Please make sure:
+>   - the number of pools match the `poolCount` defined in `testnet.yaml`
+>   - the correct dockerfile is specified ("Dockerfile.compiled" or "Dockerfile.source")
+>   - the build arguments (`args`) are correct
+
+## Build
+
+- Change to the root directory of this Git repository
+
+  ```
+  cd antithesis
+  ```
+
+- Build the `cardano-node` container image
+
+  ```
+  make build testnet=example_10.2.1-p3
+  ```
+
+- Build the `config` container image
+
+  ```
+  make build-config testnet=example_10.2.1-p3
+  ```
+
+
+## Run
+
+### Local Testnet
+
+- Start the testnet
+
+  ```
+  make up testnet=example_10.2.1-p3
+  ```
+
+- Verify that all nodes of your testnet are running
+
+  ```
+  docker ps
+  ```
+
+- Query the tip of all nodes
+
+  ```
+  make query testnet=example_10.2.1-p3
+  ```
+
+- Read the logs of the container `p1`
+
+  ```
+  docker logs --follow p1
+  ```
+
+- Find errors in the `p1` container logs
+
+  ```
+  docker logs p1 | grep -i error
+  ```
+
+- Enter the container `p1` as service user
+
+  ```
+  docker exec -ti p1 /bin/bash
+  ```
+
+- Enter the container `p1` as root
+
+  ```
+  docker exec --user root -ti p1 /bin/bash
+  ```
+
+- Stop the testnet
+
+  ```
+  make down testnet=example_10.2.1-p3
+  ```
+
+### Antithesis
+
+- Push the `cardano-node` container image
+
+  ```
+  make push testnet=example_10.2.1-p3
+  ```
+
+- Push the `config` container image
+
+  ```
+  make push-config testnet=example_10.2.1-p3
+  ```
+
+- Trigger the Antithesis testing
+
+  ```
+  make anti testnet=example_10.2.1-p3
+  ```
+
+## Troubleshoot
+
+- Query the start time in `byron-genesis.json` and `shelley-genesis.json`
+
+  ```
+  for i in {1..3} ; do docker exec -ti p${i} jq -er '.startTime' /opt/cardano-node/pools/${i}/configs/byron-genesis.json; done
+  for i in {1..3} ; do docker exec -ti p${i} jq -er '.systemStart' /opt/cardano-node/pools/${i}/configs/shelley-genesis.json; done
+  ```
+
+- Query an option in `config.json`
+
+  ```
+  for i in {1..3} ; do docker exec -ti p${i} jq -er '.PeerSharing' /opt/cardano-node/pools/${i}/configs/config.json; done
+  ```
+
+> [!NOTE]
+> The commands above assume a testnet of 3 pools, increase the `{1..3}` if needed.
+
+## Appendix
+
+- [Antithesis Documentation](https://antithesis.com/docs/)
+- [Docker Installation](https://docs.docker.com/engine/install/debian/)

@@ -1,0 +1,7 @@
+# Ignore vim files:
+*~
+*.swp
+*.swo
+
+# compose
+compose/testnet.yaml
