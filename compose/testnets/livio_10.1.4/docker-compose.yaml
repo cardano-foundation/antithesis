@@ -1,7 +1,7 @@
 ---
 
 x-base: &base
-  image: us-central1-docker.pkg.dev/molten-verve-216720/cardano-repository/livio_10.1.4-p3:latest
+  image: us-central1-docker.pkg.dev/molten-verve-216720/cardano-repository/livio_10.1.4:latest
   restart: on-failure
   build:
     context: "../../"
