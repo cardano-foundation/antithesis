@@ -7,18 +7,18 @@ duration=60
 recipients="antithesis@cardanofoundation.org"
 registry=us-central1-docker.pkg.dev/molten-verve-216720/cardano-repository
 testnet=
-url=https://cardano.antithesis.com/api/v1/launch/basic_test
+url=https://cardano.antithesis.com/api/v1/launch/cardano
 username=cardano
 
 help:
 	@echo "Arguments:"
-	@printf "  \033[34m%-30s\033[0m %s\n" description "Antithesis job description (description="Example")"
-	@printf "  \033[34m%-30s\033[0m %s\n" duration "Antithesis job duration in minutes (duration=120)"
-	@printf "  \033[34m%-30s\033[0m %s\n" recipients "Antithesis report recipients (recipients=john@example.com,peter@example.org)"
-	@printf "  \033[34m%-30s\033[0m %s\n" registry "Antithesis registry URL (registry=https://registry.example.com/tenant)"
-	@printf "  \033[34m%-30s\033[0m %s\n" testnet "testnet directory name (testnet=example_10.2.1)"
-	@printf "  \033[34m%-30s\033[0m %s\n" url "Antithesis API job URL (url=https://cardano.antithesis.com/api/v1/launch/cardano)"
-	@printf "  \033[34m%-30s\033[0m %s\n" username "Antithesis username (username=cardano)"
+	@printf "  \033[34m%-30s\033[0m %s\n" description "Antithesis job description (Default: <testnet> run)"
+	@printf "  \033[34m%-30s\033[0m %s\n" duration "Antithesis job duration in minutes (Default: 60)"
+	@printf "  \033[34m%-30s\033[0m %s\n" recipients "Antithesis report recipients (Default: antithesis@cardanofoundation.org)"
+	@printf "  \033[34m%-30s\033[0m %s\n" registry "Antithesis registry URL (Default: us-central1-docker.pkg.dev/molten-verve-216720/cardano-repository)"
+	@printf "  \033[34m%-30s\033[0m %s\n" testnet "testnet directory name (Example: example_10.2.1)"
+	@printf "  \033[34m%-30s\033[0m %s\n" url "Antithesis API job URL (Default: https://cardano.antithesis.com/api/v1/launch/cardano)"
+	@printf "  \033[34m%-30s\033[0m %s\n" username "Antithesis username (Default: cardano)"
 	@echo
 	@echo "Commands:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[34m%-30s\033[0m %s\n", $$1, $$2}'
