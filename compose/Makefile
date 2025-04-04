@@ -35,7 +35,7 @@ help:
 	@echo "Antithesis run (execute in this order)"
 	@echo "  make build testnet=example_10.2.1"
 	@echo "  make push testnet=example_10.2.1"
-	@echo "  make anti testnet=example_10.2.1 username=cardano password='password1234'"
+	@echo "  make anti testnet=example_10.2.1 password='password1234'"
 	@echo
 
 build: build-image build-config TESTNET ## Build cardano-node and config container image

@@ -18,7 +18,7 @@ This document describes the process of setting up a Cardano testnet from scratch
 
 ## Installation
 
-Docker is the only requirement to build and run your own testnets. The following instructions are tested on Debian 12:
+Docker is the only requirement to build and run your own testnets. The following instructions are tested on Debian 12.
 
 - Install dependencies via APT package manager
 
@@ -122,18 +122,11 @@ You are now ready to build your own testnet container images from source or pre-
   cd antithesis
   ```
 
-- Build the `cardano-node` container image
+- Build the `cardano-node` and `config` container images
 
   ```
-  make build testnet=example_10.2.1-p3
+  make build testnet=example_10.2.1
   ```
-
-- Build the `config` container image
-
-  ```
-  make build-config testnet=example_10.2.1-p3
-  ```
-
 
 ## Run
 
@@ -142,7 +135,7 @@ You are now ready to build your own testnet container images from source or pre-
 - Start the testnet
 
   ```
-  make up testnet=example_10.2.1-p3
+  make up testnet=example_10.2.1
   ```
 
 - Verify that all nodes of your testnet are running
@@ -154,16 +147,16 @@ You are now ready to build your own testnet container images from source or pre-
 - Query the tip of all nodes
 
   ```
-  make query testnet=example_10.2.1-p3
+  make query testnet=example_10.2.1
   ```
 
-- Read the logs of the container `p1`
+- Read the logs of container `p1`
 
   ```
   docker logs --follow p1
   ```
 
-- Find errors in the `p1` container logs
+- Find errors in container `p1`
 
   ```
   docker logs p1 | grep -i error
@@ -184,27 +177,27 @@ You are now ready to build your own testnet container images from source or pre-
 - Stop the testnet
 
   ```
-  make down testnet=example_10.2.1-p3
+  make down testnet=example_10.2.1
   ```
 
 ### Antithesis
 
-- Push the `cardano-node` container image
+- Push the `cardano-node` and `config` container images
 
   ```
-  make push testnet=example_10.2.1-p3
+  make push testnet=example_10.2.1
   ```
 
-- Push the `config` container image
+- Trigger the default Antithesis job
 
   ```
-  make push-config testnet=example_10.2.1-p3
+  make anti testnet=example_10.2.1 password='password1234'
   ```
 
-- Trigger the Antithesis testing
+- Trigger a specific Antithesis job
 
   ```
-  make anti testnet=example_10.2.1-p3
+  make anti testnet=example_10.2.1 password='password1234' url=https://cardano.antithesis.com/api/v1/launch/cardano
   ```
 
 ## Troubleshoot
