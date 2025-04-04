@@ -111,7 +111,7 @@ You are now ready to build your own testnet container images from source or pre-
 > [!NOTE]
 > Please make sure:
 >   - the number of pools match the `poolCount` defined in `testnet.yaml`
->   - the correct dockerfile is specified ("Dockerfile.compiled" or "Dockerfile.source")
+>   - the correct dockerfile is specified (`Dockerfile.compiled` or `Dockerfile.source`)
 >   - the build arguments (`args`) are correct
 
 ## Build
