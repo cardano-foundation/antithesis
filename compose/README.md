@@ -7,8 +7,8 @@
 - [Plan](#plan)
 - [Build](#build)
 - [Run](#run)
-  - [Local Testing](#local-testing)
-  - [Antithesis Testing](#antithesis-testing)
+  - [Local](#local)
+  - [AntithesisTesting](#antithesis)
 - [Troubleshoot](#troubleshoot)
 - [Appendix](#appendix)
 
@@ -130,7 +130,7 @@ You are now ready to build your own testnet container images from source or pre-
 
 ## Run
 
-### Local Testnet
+### Local
 
 - Start the testnet
 
