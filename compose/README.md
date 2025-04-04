@@ -8,7 +8,7 @@
 - [Build](#build)
 - [Run](#run)
   - [Local](#local)
-  - [AntithesisTesting](#antithesis)
+  - [Antithesis](#antithesis)
 - [Troubleshoot](#troubleshoot)
 - [Appendix](#appendix)
 
