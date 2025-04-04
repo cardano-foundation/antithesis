@@ -109,7 +109,7 @@ RUN git clone --branch master ${CARDANO_NODE_REPO}
 # Checkout cardano-node version
 WORKDIR /usr/local/src/cardano-node
 RUN git fetch --all --recurse-submodules --tags && \
-    git checkout ${CARDANO_NODE_REPOSITORY_RELEASE}
+    git checkout ${CARDANO_NODE_REF}
 
 # Build cardano-node binary
 WORKDIR /usr/local/src/cardano-node/cardano-node
