@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.SILENT: build push build-config push-config up down query
+.SILENT: build build-image build-config push push-image push-config up down query anti
 
 description="${testnet} run"
 duration=60
@@ -12,33 +12,44 @@ username=cardano
 
 help:
 	@echo "Arguments:"
-	@printf "\033[34m%-30s\033[0m %s\n" description "Antithesis description (description="Example")"
-	@printf "\033[34m%-30s\033[0m %s\n" duration "Antithesis duration in minutes (duration=120)"
-	@printf "\033[34m%-30s\033[0m %s\n" recipients "Antithesis recipients (recipients=john@example.com,peter@example.org)"
-	@printf "\033[34m%-30s\033[0m %s\n" registry "registry link (registry=https://registry.example.com/tenant)"
-	@printf "\033[34m%-30s\033[0m %s\n" testnet "testnet name (testnet=example_10.2.1-p3)"
-	@printf "\033[34m%-30s\033[0m %s\n" url "Antithesis API link (url=https://example.com/api/v1/launch/example)"
-	@printf "\033[34m%-30s\033[0m %s\n" username "Antithesis username (username=cardano)"
+	@printf "  \033[34m%-30s\033[0m %s\n" description "Antithesis job description (description="Example")"
+	@printf "  \033[34m%-30s\033[0m %s\n" duration "Antithesis job duration in minutes (duration=120)"
+	@printf "  \033[34m%-30s\033[0m %s\n" recipients "Antithesis report recipients (recipients=john@example.com,peter@example.org)"
+	@printf "  \033[34m%-30s\033[0m %s\n" registry "Antithesis registry URL (registry=https://registry.example.com/tenant)"
+	@printf "  \033[34m%-30s\033[0m %s\n" testnet "testnet directory name (testnet=example_10.2.1)"
+	@printf "  \033[34m%-30s\033[0m %s\n" url "Antithesis API job URL (url=https://example.com/api/v1/launch/example)"
+	@printf "  \033[34m%-30s\033[0m %s\n" username "Antithesis username (username=cardano)"
 	@echo
 	@echo "Commands:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[34m%-30s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[34m%-30s\033[0m %s\n", $$1, $$2}'
 	@echo
 	@echo "Examples:"
-	@echo "make build testnet=example_10.2.1-p3"
-	@echo "make push testnet=example_10.2.1-p3"
-	@echo "make build-config testnet=example_10.2.1-p3"
-	@echo "make push-config testnet=example_10.2.1-p3"
-	@echo "make anti testnet=example_10.2.1-p3 username=cardano password='password1234'"
+	@echo
+	@echo "Local run (execute in this order)"
+	@echo "  make build testnet=example_10.2.1"
+	@echo "  make push testnet=example_10.2.1"
+	@echo "  make up testnet=example_10.2.1"
+	@echo "  make query testnet=example_10.2.1"
+	@echo "  make down testnet=example_10.2.1"
+	@echo
+	@echo "Antithesis run (execute in this order)"
+	@echo "  make build testnet=example_10.2.1"
+	@echo "  make push testnet=example_10.2.1"
+	@echo "  make anti testnet=example_10.2.1 username=cardano password='password1234'"
 	@echo
 
-build: TESTNET ## Build cardano-node container image
-	ln -snf testnets/${testnet}/testnet.yaml testnet.yaml ; cd testnets/${testnet} ; docker compose build
+build: build-image build-config TESTNET ## Build cardano-node and config container image
 
-push: TESTNET ## Push cardano-node container image
-	docker push $$(awk '/image: /{ print $$2 }' testnets/${testnet}/docker-compose.yaml)
+build-image: TESTNET ## Build cardano-node container image
+	ln -snf testnets/${testnet}/testnet.yaml testnet.yaml ; cd testnets/${testnet} ; docker compose build
 
 build-config: TESTNET ## Build config container image
 	docker build -f Dockerfile.config -t ${registry}/${testnet}_config:latest testnets/${testnet}
+
+push: push-image push-config TESTNET ## Push cardano-node and config container image
+
+push-image: TESTNET ## Push cardano-node container image
+	docker push $$(awk '/image: /{ print $$2 }' testnets/${testnet}/docker-compose.yaml)
 
 push-config: TESTNET ## Push config container image
 	docker push ${registry}/${testnet}_config:latest
