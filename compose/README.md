@@ -119,7 +119,7 @@ You are now ready to build your own testnet container images from source or pre-
 - Change to the root directory of this Git repository
 
   ```
-  cd antithesis
+  cd ../
   ```
 
 - Build the `cardano-node` and `config` container images
