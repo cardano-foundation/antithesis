@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?><?xml-stylesheet type="text/xsl" href="rss.xsl"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+    <channel>
+        <title>Tartarus Blog</title>
+        <link>https://cardano-scaling.github.io/antithesis/</link>
+        <description>Tartarus Blog</description>
+        <lastBuildDate>Wed, 02 Apr 2025 00:00:00 GMT</lastBuildDate>
+        <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
+        <generator>https://github.com/jpmonette/feed</generator>
+        <language>en</language>
+        <item>
+            <title><![CDATA[Cardano / Antithesis Project Kick-off]]></title>
+            <link>https://cardano-scaling.github.io/antithesis/kick-off-antithesis</link>
+            <guid>https://cardano-scaling.github.io/antithesis/kick-off-antithesis</guid>
+            <pubDate>Wed, 02 Apr 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Today, April 2nd, 2025 was the date of the official kick-off for the Cardano/Antithesis project. Already involved in testing and monitoring the Cardano network infrastructure, the Cardano Foundation has decided to dedicate resources to evaluate if and how Antithesis could increase the reach and level of quality assurance the network needs.]]></description>
+            <content:encoded><![CDATA[<p>Today, April 2nd, 2025 was the date of the official kick-off for the Cardano/Antithesis project. Already involved in testing and monitoring the Cardano network infrastructure, the <a href="https://cardanofoundation.org/" target="_blank" rel="noopener noreferrer">Cardano Foundation</a> has decided to dedicate resources to evaluate if and how <a href="https://antithesis.com/" target="_blank" rel="noopener noreferrer">Antithesis</a> could increase the reach and level of quality assurance the network needs.</p>
+<p>This post introduces the project, its motivations, scope, ambitions, and timeline.</p>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="why-this-project">Why this project?<a href="https://cardano-scaling.github.io/antithesis/kick-off-antithesis#why-this-project" class="hash-link" aria-label="Direct link to Why this project?" title="Direct link to Why this project?">​</a></h2>
+<p>The teams implementing the <a href="https://github.com/IntersectMBO/cardano-node" target="_blank" rel="noopener noreferrer">cardano-node</a> have developed over the years an extensive set of tools, including sophisticated <a href="https://hackage.haskell.org/package/io-sim" target="_blank" rel="noopener noreferrer">simulation</a> and <a href="https://hackage.haskell.org/package/quickcheck-dynamic" target="_blank" rel="noopener noreferrer">model-based</a> testing systems</p>
+<p>Testing distributed systems at scale is a hard problem, poses unique challenges in terms of tools, scenarios generation, reproducibility, failure analysis, and it requires deep expertise and a significant investment to be effective.</p>
+<p>As exemplified by the continued successes of <a href="https://jepsen.io/" target="_blank" rel="noopener noreferrer">Jepsen</a> reports over the past decade, rigorous system-level blackbox testing with fault injections and sophisticated traces analysis can uncover subtle concurrency bugs and security vulnerabilities. However, such tests can quickly be expensive to setup even with virtualised infrastructure, take a lot of time to execute, and are hard to reproduce.</p>
+<p>Simulation testing, whereby a piece of software is tested in an environment which <em>simulates</em> its actual execution target to provide better control and allow exploring a lot of scenarios including fault injections, is a quite old technique. The success the <a href="https://www.foundationdb.org/" target="_blank" rel="noopener noreferrer">FoundationDB</a> team had applying this technique sparked the development of <a href="https://antithesis.com/" target="_blank" rel="noopener noreferrer">Antithesis</a>, a generic platform for simulation testing of distributed systems.</p>
+<p>As the ecosystem grows to include new and different "nodes" in the network like <a href="https://github.com/txpipe/dolos" target="_blank" rel="noopener noreferrer">Dolos</a>, <a href="https://github.com/blinklabs-io/dingo" target="_blank" rel="noopener noreferrer">Dingo</a>, <a href="https://github.com/pragma-org/amaru" target="_blank" rel="noopener noreferrer">Amaru</a>, and many tools and systems building on Cardano core infrastructure, the need arises to investigate how to provide similar system-level testing tools in a language-agnostic way, tools that could be used by the whole community to investigate more scenarios in a more diverse environment.</p>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="what-is-antithesis">What is Antithesis?<a href="https://cardano-scaling.github.io/antithesis/kick-off-antithesis#what-is-antithesis" class="hash-link" aria-label="Direct link to What is Antithesis?" title="Direct link to What is Antithesis?">​</a></h2>
+<p>In short, Antithesis is a platform combining:</p>
+<ol>
+<li>A <em>deterministic hypervisor</em> that can run nearly arbitrary pieces of software, emulating the full complexity of the underlying operating system and network, including the ability to simulate the passing of time,</li>
+<li><em>Property-based testing</em> and <em>fuzzing</em> to deterministically generate complex test scenarios and check observable properties of the system-under-test, with the ability to <em>reproduce</em> failures,</li>
+<li>Analysis and reporting tools to help troubleshoot issues signaled by tests run.</li>
+</ol>
+<p>The team is responsible for packaging the system-under-test as a "cluster" of containers running and interacting within the simulated environment provided by the platform, for providing test clients and scenarios to explore, and for defining "interesting" properties to verify.</p>
+<p>Here is a diagram from <a href="https://antithesis.com/product/what_is_antithesis/" target="_blank" rel="noopener noreferrer">antithesis' website</a> summarizing how the platform works:</p>
+<p><img decoding="async" loading="lazy" src="https://antithesis.com/img_opt/igPT-jsSII-2034.webp" alt="" class="img_ev3q"></p>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="what-is-this-project-about">What is this project about?<a href="https://cardano-scaling.github.io/antithesis/kick-off-antithesis#what-is-this-project-about" class="hash-link" aria-label="Direct link to What is this project about?" title="Direct link to What is this project about?">​</a></h2>
+<p>While we strongly believe in the effectiveness of this approach especially as new components get developed, network grows, and new features are added to the protocol, and Antithesis has already been adopted by industry leaders like Confluent or Ethereum, we want to understand how this investment can yield value to the Cardano community <em>as a whole</em> in a perennial way.</p>
+<p>The long-term goal of this project is therefore to collectively build and maintain a testing infrastructure that can benefit the ecosystem and most notably those parties involved in the development and maintenance of the Cardano infrastructure: Nodes, protocols, and related tools. We envision this infrastructure to be governed through an open and transparent process which is yet to be defined, and to be funded by the <em>community</em> through whatever channels seem the most effective, whether it is grants, dedicated treasury withdrawals, infrastructure budget, contributions and fees...</p>
+<p>In the short-term however, we need to experiment with the platform, understand what are its capabilities and limits, what it requires from the system-under-test in order to be the most effective, how powerful it is to find and troubleshoot bugs and security vulnerabilities, and more generally openly and candidly build a strong case for the governing bodies of the Cardano ecosystem to decide whether or not this investment shall be pursued.</p>
+<p>The phases and coarse-grained timeline of the project are documented in the <a href="https://github.com/cardano-foundation/antithesis" target="_blank" rel="noopener noreferrer">README</a>, and this blog post marks the beginning of the <em>Proof-of-Concept</em> period during which will collaborate with Antithesis to assess the tool.</p>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="why-should-you-care">Why should you care?<a href="https://cardano-scaling.github.io/antithesis/kick-off-antithesis#why-should-you-care" class="hash-link" aria-label="Direct link to Why should you care?" title="Direct link to Why should you care?">​</a></h2>
+<p>As already stated, the goal of this project is to evaluate whether the Cardano community, as a whole, could benefit from the continuous availability of Antithesis as a testing infrastructure. This means that if you have some expertise on Cardano, its components, the network, the protocol, and if you have ideas on properties we should be testing, scenarios we should investigate, faults and adversarial behaviours we should be prepared to face, we would be more than happy to hear from you!</p>
+<p>Concretely, this means that we expect from <em>you</em> as a Cardano enthusiast to help us with:</p>
+<ul>
+<li>Improving infrastructure code (eg. docker images, containers, compose files) we use to run tests, and defining particular setups to test,</li>
+<li>Defining and designing <a href="https://antithesis.com/docs/test_templates/" target="_blank" rel="noopener noreferrer">test</a> that explore "interesting" scenarios,</li>
+<li>Stating and refining properties that need to old, in specific or generic cases,</li>
+<li>Documenting the expected behaviour in such a way that can easily lead to test generations, for example under the umbrella of teh <a href="https://github.com/cardano-scaling/cardano-blueprint" target="_blank" rel="noopener noreferrer">Cardano Blueprint</a> project,</li>
+<li>Troubleshooting bugs and security vulnerabilities, following our <a href="https://github.com/cardano-foundation/antithesis/security/policy" target="_blank" rel="noopener noreferrer">Security policy</a>,</li>
+<li>...</li>
+</ul>]]></content:encoded>
+            <category>Infrastructure</category>
+        </item>
+    </channel>
+</rss>
