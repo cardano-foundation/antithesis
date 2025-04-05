@@ -2,50 +2,53 @@ SHELL := /bin/bash
 
 .SILENT: build build-image build-config push push-image push-config up down query anti
 
-description="${testnet} run"
-duration=60
-recipients="antithesis@cardanofoundation.org"
-registry=us-central1-docker.pkg.dev/molten-verve-216720/cardano-repository
-testnet=
-url=https://cardano.antithesis.com/api/v1/launch/cardano
-username=cardano
+description:="${testnet} run"
+duration:=60
+recipients:=antithesis@cardanofoundation.org
+registry:=us-central1-docker.pkg.dev/molten-verve-216720/cardano-repository
+testnet:=
+url:=https://cardano.antithesis.com/api/v1/launch/cardano
+username:=cardano
+
+export registry
 
 help:
+	@echo
 	@echo "Arguments:"
-	@printf "  \033[34m%-30s\033[0m %s\n" description "Antithesis job description (Default: <testnet> run)"
+	@printf "  \033[34m%-30s\033[0m %s\n" testnet "Testnet directory name (Example: example_10.2.1)"
+	@printf "  \033[34m%-30s\033[0m %s\n" description "Antithesis job description (Default: \"<testnet> run\")"
 	@printf "  \033[34m%-30s\033[0m %s\n" duration "Antithesis job duration in minutes (Default: 60)"
 	@printf "  \033[34m%-30s\033[0m %s\n" recipients "Antithesis report recipients (Default: antithesis@cardanofoundation.org)"
 	@printf "  \033[34m%-30s\033[0m %s\n" registry "Antithesis registry URL (Default: us-central1-docker.pkg.dev/molten-verve-216720/cardano-repository)"
-	@printf "  \033[34m%-30s\033[0m %s\n" testnet "testnet directory name (Example: example_10.2.1)"
 	@printf "  \033[34m%-30s\033[0m %s\n" url "Antithesis API job URL (Default: https://cardano.antithesis.com/api/v1/launch/cardano)"
 	@printf "  \033[34m%-30s\033[0m %s\n" username "Antithesis username (Default: cardano)"
+	@printf "  \033[34m%-30s\033[0m %s\n" password "Antithesis password"
 	@echo
 	@echo "Commands:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[34m%-30s\033[0m %s\n", $$1, $$2}'
 	@echo
 	@echo "Examples:"
+	@printf "  \033[34mLocal run (execute in this order)\033[0m\n"
+	@echo "    make build testnet=example_10.2.1"
+	@echo "    make up testnet=example_10.2.1"
+	@echo "    make query testnet=example_10.2.1"
+	@echo "    make down testnet=example_10.2.1"
 	@echo
-	@echo "Local run (execute in this order)"
-	@echo "  make build testnet=example_10.2.1"
-	@echo "  make up testnet=example_10.2.1"
-	@echo "  make query testnet=example_10.2.1"
-	@echo "  make down testnet=example_10.2.1"
-	@echo
-	@echo "Antithesis run (execute in this order)"
-	@echo "  make build testnet=example_10.2.1"
-	@echo "  make push testnet=example_10.2.1"
-	@echo "  make anti testnet=example_10.2.1 password='password1234'"
+	@printf "  \033[34mAntithesis run (execute in this order)\033[0m\n"
+	@echo "    make build testnet=example_10.2.1"
+	@echo "    make push testnet=example_10.2.1"
+	@echo "    make anti testnet=example_10.2.1 password='password1234'"
 	@echo
 
-build: build-image build-config TESTNET ## Build cardano-node and config container image
+build: TESTNET build-image build-config ## Build cardano-node and config container image
 
 build-image: TESTNET ## Build cardano-node container image
-	ln -snf testnets/${testnet}/testnet.yaml testnet.yaml ; cd testnets/${testnet} ; docker compose build
+	ln -snf testnets/${testnet}/testnet.yaml .testnet.yaml ; cd testnets/${testnet} ; docker compose build
 
 build-config: TESTNET ## Build config container image
 	docker build -f Dockerfile.config -t ${registry}/${testnet}_config:latest testnets/${testnet}
 
-push: push-image push-config TESTNET ## Push cardano-node and config container image
+push: TESTNET push-image push-config ## Push cardano-node and config container image
 
 push-image: TESTNET ## Push cardano-node container image
 	docker push $$(awk '/image: /{ print $$2 }' testnets/${testnet}/docker-compose.yaml)
@@ -73,4 +76,4 @@ anti: TESTNET ## Run Antithesis job
 	'{params: {"antithesis.description": $$description,"antithesis.duration": $$duration,"antithesis.config_image": $$config_image,"antithesis.images": $$images,"antithesis.report.recipients": $$recipients}}')"
 
 TESTNET: ;
-	@if [ -z "${testnet}" ]; then echo "* Please define the testnet argument:"; echo "testnet=<name>"; echo; exit 1; fi
+	@if [ -z "${testnet}" ]; then echo "* Please define the testnet argument:"; echo "testnet=example_10.2.1"; echo; exit 1; else export "testnet=${testnet}"; fi

@@ -82,12 +82,12 @@ You are now ready to build your own testnet container images from source or pre-
   git clone git@github.com:cardano-foundation/antithesis.git
   ```
 
-- Create a copy of the `example_10.2.1` folder to a directory with your own testnet name
+- Create a copy of the `example_10.2.1` folder in a directory named after your own test network
 
   ```
-  cd antithesis/testnets/
-  cp -r example_10.2.1 <mytestnet>
-  cd <mytestnet>/
+  cd testnets/
+  cp -r example_10.2.1 mytestnet
+  cd mytestnet/
   ```
 
 - Edit the `README.md` file to describe your test case and the version used
@@ -108,22 +108,15 @@ You are now ready to build your own testnet container images from source or pre-
   editor docker-compose.yaml
   ```
 
-> [!IMPORTANT]
+> [!CAUTION]
 > Please make sure:
 >   - the number of pools match the `poolCount` defined in `testnet.yaml`
 >   - the correct dockerfile is specified (`Dockerfile.compiled` or `Dockerfile.source`)
 >   - the build arguments (`args`) are correct
 
-> [!CAUTION]
-> Please make sure the `image` **name** matches your testnet folder name. The format is: `image: url/name:tag`
->
-> ```
-> image: us-central1-docker.pkg.dev/molten-verve-216720/cardano-repository/example_10.2.1:latest
-> ```
-
 ## Build
 
-- Change to the root directory of this Git repository
+- Move up two directories to the location where the Makefile is located
 
   ```
   cd ../../

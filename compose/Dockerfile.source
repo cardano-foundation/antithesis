@@ -178,7 +178,7 @@ WORKDIR /usr/local/src/testnet-generation-tool
 RUN uv sync
 
 # Copy testnet.yaml specification
-COPY --chown=root:root testnet.yaml /usr/local/src/testnet-generation-tool/testnet.yaml
+COPY --chown=root:root .testnet.yaml /usr/local/src/testnet-generation-tool/testnet.yaml
 
 # Build testnet configuration files
 RUN uv run python3 genesis-cli.py testnet.yaml -o /tmp/testnet -c generate

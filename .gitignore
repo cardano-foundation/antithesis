@@ -4,4 +4,4 @@
 *.swo
 
 # compose
-compose/testnet.yaml
+compose/.testnet.yaml
