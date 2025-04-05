@@ -51,7 +51,7 @@ build-config: TESTNET ## Build config container image
 push: TESTNET push-image push-config ## Push cardano-node and config container image
 
 push-image: TESTNET ## Push cardano-node container image
-	docker push $$(awk '/image: /{ print $$2 }' testnets/${testnet}/docker-compose.yaml)
+	docker push ${registry}/${testnet}:latest
 
 push-config: TESTNET ## Push config container image
 	docker push ${registry}/${testnet}_config:latest
