@@ -1,0 +1,4 @@
+infra:
+  label: Infrastructure
+  permalink: /infra
+  description: Setting up infrastructure for Antithesis run

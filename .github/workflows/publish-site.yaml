@@ -1,0 +1,43 @@
+name: "Publish Docs"
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publishing:
+    name: Publish Site
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+
+    - name: Build documentation
+      working-directory: docs
+      run: |
+        # Only warn on broken links here as the individual documentation builds
+        # should have failed with broken links originally.
+        sed -i 's|onBrokenLinks: "throw"|onBrokenLinks: "warn"|' docusaurus.config.ts
+
+        yarn
+        yarn build
+
+        mkdir -p /tmp/public
+        mv build/* /tmp/public
+        # Clean the working copy
+        git clean -dxf
+
+    - name: 🚢 Publish Documentation
+      uses: peaceiris/actions-gh-pages@v4
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN || github.token }}
+        publish_dir: /tmp/public
+        enable_jekyll: true
+        force_orphan: true
