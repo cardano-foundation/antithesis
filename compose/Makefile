@@ -10,8 +10,6 @@ testnet:=
 url:=https://cardano.antithesis.com/api/v1/launch/cardano
 username:=cardano
 
-export registry
-
 help:
 	@echo
 	@echo "Arguments:"

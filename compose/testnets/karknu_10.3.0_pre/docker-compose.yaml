@@ -1,7 +1,7 @@
 ---
 
 x-base: &base
-  image: ${registry}/${testnet}:latest
+  image: us-central1-docker.pkg.dev/molten-verve-216720/cardano-repository/karknu_10.3.0_pre:latest
   restart: on-failure
   build:
     context: "../../"

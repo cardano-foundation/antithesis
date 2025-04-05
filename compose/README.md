@@ -108,11 +108,18 @@ You are now ready to build your own testnet container images from source or pre-
   editor docker-compose.yaml
   ```
 
-> [!CAUTION]
+> [!IMPORTANT]
 > Please make sure:
 >   - the number of instances in the `docker-compose.yaml` match the `poolCount` defined in `testnet.yaml`
 >   - the correct `dockerfile` is specified (`Dockerfile.compiled` or `Dockerfile.source`) in `docker-compose.yaml`
 >   - the build arguments (`args`) are correct in `docker-compose.yaml`
+
+> [!CAUTION]
+> Please make sure the `image` **name** matches your testnet folder name in `docker-compose.yaml`.
+> The format is: `image: url/name:tag`:
+> ```
+> image: us-central1-docker.pkg.dev/molten-verve-216720/cardano-repository/example_10.2.1:latest
+> ```
 
 ## Build
 
