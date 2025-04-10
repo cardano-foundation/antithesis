@@ -171,5 +171,6 @@ RUN groupadd --gid 10000 cardano && \
 #STOPSIGNAL SIGINT
 
 COPY tracer-config.yaml .
+COPY run-tracer.sh .
 
-ENTRYPOINT ["/usr/local/bin/cardano-tracer"]
+ENTRYPOINT ["/run-tracer.sh"]
