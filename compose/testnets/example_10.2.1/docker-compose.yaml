@@ -13,12 +13,27 @@ x-env: &env
   POOL_ID: "0" # Placeholder required for override
 
 services:
+  tracer:
+    image: cardano-tracer:latest
+    container_name: tracer
+    volumes:
+      - tracer:/opt/cardano-tracer
+    ports:
+      - "4000:4000"
+    command: 
+       - "--config"
+       - "tracer-config.yaml"
+    build:
+      context: "../../"
+      dockerfile: "Dockerfile.tracer.source"
+
   p1:
     <<: *base
     container_name: p1
     hostname: p1.example
     volumes:
       - p1:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
     ports:
       - "3001:3001"
     environment:
@@ -31,6 +46,7 @@ services:
     hostname: p2.example
     volumes:
       - p2:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
     ports:
       - "3002:3001"
     environment:
@@ -44,6 +60,7 @@ services:
     hostname: p3.example
     volumes:
       - p3:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
     ports:
       - "3003:3001"
     environment:
@@ -59,6 +76,7 @@ services:
       POOLS: "3"
 
 volumes:
+  tracer:
   p1:
   p2:
   p3:

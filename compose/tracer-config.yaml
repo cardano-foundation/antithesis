@@ -1,0 +1,13 @@
+---
+networkMagic: 42 
+network:
+  tag: AcceptAt
+  contents: "/opt/cardano-tracer/tracer.socket"
+logging:
+- logRoot: "/opt/cardano-tracer"
+  logMode: FileMode
+  logFormat: ForMachine
+verbosity: Maximum
+hasPrometheus:
+  epHost: 0.0.0.0
+  epPort: 4000
