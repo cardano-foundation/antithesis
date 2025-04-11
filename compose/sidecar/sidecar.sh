@@ -33,9 +33,8 @@ signal_ready() {
         for i in $(seq 1 "${POOLS}"); do
             (
                 while true; do
-                    block_num=$(cardano-cli ping -t -q -j --magic 42 --host p${i}.example --port ${PORT} 2>/dev/null | jq -r '.tip[0].blockNo' 2>/dev/null)
-                    exit_code=${?}
-                    if [ ${exit_code} -ne 0 ]; then
+                    cardano-cli ping -c1 -q -j --magic 42 --host p${i}.example --port ${PORT} 2>/dev/null
+                    if [ $? -ne 0 ] ; then
                         sleep 1
                         continue
                     else
