@@ -14,18 +14,20 @@ x-env: &env
 
 services:
   tracer:
-    image: cardano-tracer:latest
+    image: ${registry}${testnet}_tracer:latest
+    restart: on-failure
+    hostname: tracer.example
     container_name: tracer
     volumes:
       - tracer:/opt/cardano-tracer
     ports:
       - "4000:4000"
-    command: 
+    command:
        - "--config"
        - "tracer-config.yaml"
     build:
-      context: "../../"
-      dockerfile: "Dockerfile.tracer.source"
+      context: "../../tracer"
+      dockerfile: "Dockerfile"
 
   p1:
     <<: *base

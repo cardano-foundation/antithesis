@@ -44,7 +44,7 @@ help:
 	@echo "    make anti testnet=example_10.2.1 password='password1234'"
 	@echo
 
-build: TESTNET build-image build-config build-sidecar ## Build cardano-node, config and sidecar container image
+build: TESTNET build-image build-config build-sidecar build-tracer ## Build cardano-node, config, sidecar, and tracer images
 
 build-image: TESTNET ## Build cardano-node container image
 	ln -snf testnets/${testnet}/testnet.yaml .testnet.yaml ; cd testnets/${testnet} ; docker compose build
@@ -54,6 +54,9 @@ build-config: TESTNET ## Build config container image
 
 build-sidecar: TESTNET ## Build sidecar container image
 	docker build -f sidecar/Dockerfile -t ${registry}${testnet}_sidecar:latest sidecar/
+
+build-tracer: TESTNET ## Build tracer container image
+	docker build -f tracer/Dockerfile -t ${registry}${testnet}_tracer:latest tracer/
 
 push: TESTNET push-image push-config push-sidecar ## Push cardano-node, config and sidecar container image
 
