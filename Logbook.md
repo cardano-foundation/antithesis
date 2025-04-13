@@ -1,5 +1,21 @@
 # Log Book
 
+## 2025-04-13
+
+### Adding cardano-tracer
+
+* One of the issues we had with our initial setup was with logging, as the antithesis platform puts some limits on the amount of log one can output, something which is even checked by a property, currently set at 200MB/core/CPU hour
+* The [cardano-tracer](https://github.com/IntersectMBO/cardano-node/blob/master/cardano-tracer) is the new recommended tracing infrastructure for cardano-node that provides a protocol and an agent to forward logs to. This allows logging and tracing across a cluster of nodes to be aggregated  which is something that should prove useful to define properties
+* We have added the needed machinery in the [compose](compose) infrastructure:
+  1. compile a docker image to run the cardano-tracer executable as it's not available in a pre-compiled form by default
+  2. provide tracer configuration to expose prometheus metrics and enable connection from any number of other nodes
+  3. modify node's configuration to enable tracing and logging, which was turned off by default
+  4. run tracer container as part of compose stack along with cardano-node and "sidecar"
+* Some minor roadblocks we hit on this journey:
+  * managing users and r/w rights across shared volumes can be tricky. All services are run with a non-privileged user `cardano` but volumes are mounted with owner `root` by default (could not find a way to designate a different user in [compose](https://docs.docker.com/reference/compose-file/volumes/) documentation). We resorted to the usual technique of wrapping up `cardano-tracer` service in a script that modifies owner and rights on the fly upon startup
+  * for the cardano-node to forward traces require specific configuration, even though it's enabled by default since 10.2. if `TraceOptions` key is not present, the node won't start
+* While a first step would be to just read or follow the logs the cardano-tracer writes to files, the trace-forwarding protocol could be leveraged by write test and properties in a more direct manner, eg. to write a service ingesting logs and traces direclty and using default AT SDK to generate tests
+
 ## 2025-04-09
 
 ### Meeting summary
