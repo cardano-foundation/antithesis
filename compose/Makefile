@@ -58,7 +58,7 @@ build-sidecar: TESTNET ## Build sidecar container image
 build-tracer: TESTNET ## Build tracer container image
 	docker build -f tracer/Dockerfile -t ${registry}${testnet}_tracer:latest tracer/
 
-push: TESTNET push-image push-config push-sidecar ## Push cardano-node, config and sidecar container image
+push: TESTNET push-image push-config push-tracer push-sidecar ## Push cardano-node, config and sidecar container image
 
 push-image: TESTNET ## Push cardano-node container image
 	docker push ${registry}${testnet}:latest
@@ -68,6 +68,9 @@ push-config: TESTNET ## Push config container image
 
 push-sidecar: TESTNET ## Push sidecar container image
 	docker push ${registry}${testnet}_sidecar:latest
+
+push-tracer: TESTNET ## Push tracer container image
+	docker push ${registry}${testnet}_tracer:latest
 
 up: TESTNET ## Start Run local Docker Compose
 	cd testnets/${testnet} ; docker compose up --detach
