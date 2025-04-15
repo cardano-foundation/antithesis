@@ -16,6 +16,8 @@ protocolConsts:
 --- # Optional Shelley Genesis Overide
 epochLength: 86400
 securityParam: 432
+slotLength: 0.25
+activeSlotsCoeff: 0.1
 maxLovelaceSupply: 45000000000000000
 protocolParams:
   decentralisationParam: 0
@@ -55,20 +57,21 @@ TraceConnectionManagerTransitions: true
 TraceDNSResolver: true
 TraceDNSSubscription: true
 TraceDebugPeerSelection: true
-TraceForge: true
-TraceForgeStateInfo: true
-TraceHandshake: true
-TraceInboundGovernor: true
-TraceIpSubscription: true
-TraceLedgerPeers: true
-TraceLocalConnectionManager: true
-TraceLocalHandshake: true
-TraceLocalRootPeers: true
-TracePeerSelection: true
-TracePeerSelectionActions: true
-TracePublicRootPeers: true
-TraceServer: true
-TurnOnLoggingMetrics: true
+TraceForge: false 
+TraceForgeStateInfo: false 
+TraceHandshake: false 
+TraceInboundGovernor: false 
+TraceIpSubscription: false 
+TraceLedgerPeers: false 
+TraceLocalConnectionManager: false 
+TraceLocalHandshake: false 
+TraceLocalRootPeers: false 
+TraceChainDB: true
+TracePeerSelection: false 
+TracePeerSelectionActions: false 
+TracePublicRootPeers: false 
+TraceServer: false 
+TurnOnLoggingMetrics: true 
 TurnOnLogging: true
 UseTraceDispatcher: true
 TraceOptionForwarder:

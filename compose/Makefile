@@ -37,6 +37,7 @@ help:
 	@echo "    make query testnet=example_10.2.1"
 	@echo "    make validate testnet=example_10.2.1"
 	@echo "    make down testnet=example_10.2.1"
+	@echo "    make tail-sdk-jsonl testnet=example_10.2.1"
 	@echo
 	@printf "  \033[34mAntithesis run (execute in this order)\033[0m\n"
 	@echo "    make build testnet=example_10.2.1 registry=us-central1-docker.pkg.dev/molten-verve-216720/cardano-repository/"
@@ -81,6 +82,10 @@ down: TESTNET ## Stop local Docker Compose
 query: TESTNET ## Query tip of all pools
 	pools="$$(awk '/poolCount: /{ print $$2 }' testnets/${testnet}/testnet.yaml)" ; \
 	for i in $$(seq 1 $${pools}) ; do docker exec -ti p$${i} timeout 0.05 cardano-cli ping --magic 42 --host 127.0.0.1 --port 3001 --tip --quiet -c1; done ; true
+
+tail-sdk-jsonl:
+	docker exec -it tracer /bin/bash -c 'ANTITHESIS_OUTPUT_DIR="$${ANTITHESIS_OUTPUT_DIR:-/tmp}"; tail -f $$ANTITHESIS_OUTPUT_DIR/sdk.jsonl'
+
 
 validate: TESTNET ## Check for consensus among all pools
 	docker exec -ti s1 /opt/composer/convergence/eventually_converged.sh
