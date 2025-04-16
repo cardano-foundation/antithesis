@@ -13,12 +13,28 @@ x-env: &env
   POOL_ID: "0" # Placeholder required for override
 
 services:
+  tracer:
+    image: ${registry}${testnet}_tracer:latest
+    restart: on-failure
+    hostname: tracer.example
+    container_name: tracer
+    volumes:
+      - tracer:/opt/cardano-tracer
+    ports:
+      - "4000:4000"
+    command:
+       - "--config"
+       - "tracer-config.yaml"
+    build:
+      context: "../../tracer"
+      dockerfile: "Dockerfile"
   p1:
     <<: *base
     container_name: p1
     hostname: p1.example
     volumes:
       - p1:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
     ports:
       - "3001:3001"
     environment:
@@ -31,6 +47,7 @@ services:
     hostname: p2.example
     volumes:
       - p2:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
     ports:
       - "3002:3001"
     environment:
@@ -44,6 +61,7 @@ services:
     hostname: p3.example
     volumes:
       - p3:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
     ports:
       - "3003:3001"
     environment:
@@ -56,6 +74,7 @@ services:
     hostname: p4.example
     volumes:
       - p4:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
     ports:
       - "3004:3001"
     environment:
@@ -68,6 +87,7 @@ services:
     hostname: p5.example
     volumes:
       - p5:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
     ports:
       - "3005:3001"
     environment:
@@ -80,6 +100,7 @@ services:
     hostname: p6.example
     volumes:
       - p6:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
     ports:
       - "3006:3001"
     environment:
@@ -93,6 +114,7 @@ services:
     hostname: p7.example
     volumes:
       - p7:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
     ports:
       - "3007:3001"
     environment:
@@ -105,6 +127,7 @@ services:
     hostname: p8.example
     volumes:
       - p8:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
     ports:
       - "3008:3001"
     environment:
@@ -117,6 +140,7 @@ services:
     hostname: p9.example
     volumes:
       - p9:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
     ports:
       - "3009:3001"
     environment:
@@ -129,6 +153,7 @@ services:
     hostname: p10.example
     volumes:
       - p10:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
     ports:
       - "3010:3001"
     environment:
@@ -141,6 +166,7 @@ services:
     hostname: p11.example
     volumes:
       - p11:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
     ports:
       - "3011:3001"
     environment:
@@ -153,6 +179,7 @@ services:
     hostname: p12.example
     volumes:
       - p12:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
     ports:
       - "3012:3001"
     environment:
@@ -169,6 +196,7 @@ services:
       POOLS: "12"
 
 volumes:
+  tracer:
   p1:
   p2:
   p3:

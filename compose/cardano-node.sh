@@ -167,6 +167,7 @@ assemble_command() {
     cmd+=(run)
     cmd+=(--database-path ${DATABASE_PATH})
     cmd+=(--socket-path ${SOCKET_PATH})
+    cmd+=(--tracer-socket-path-connect /opt/cardano-tracer/tracer.socket)
 
     # TYPE
     if [ "${TYPE,,}" = "bp" ]; then
