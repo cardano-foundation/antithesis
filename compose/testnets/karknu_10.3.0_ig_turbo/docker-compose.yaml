@@ -34,6 +34,7 @@ services:
     hostname: p1.example
     volumes:
       - p1:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
     ports:
       - "3001:3001"
     environment:
@@ -46,6 +47,7 @@ services:
     hostname: p2.example
     volumes:
       - p2:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
     ports:
       - "3002:3001"
     environment:
@@ -59,6 +61,7 @@ services:
     hostname: p3.example
     volumes:
       - p3:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
     ports:
       - "3003:3001"
     environment:
@@ -74,6 +77,7 @@ services:
       POOLS: "3"
 
 volumes:
+  tracer:
   p1:
   p2:
   p3:
