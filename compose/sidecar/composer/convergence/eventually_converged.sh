@@ -30,9 +30,11 @@ validate_block_hash() {
     done
 
     # Wait for all processes and handle errors
-    for pid in "${pids[@]}"; do
+    for (( i=0; i < ${#pids[@]}; i++ )); do
+        pid=${pids[$i]}
         if ! wait "$pid"; then
-            echo "Error: Process $pid failed" >&2
+            j=$(( idx + 1 ))
+            echo "Error: Host p${j}.example failed" >&2
             status=2
         fi
     done
