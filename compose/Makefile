@@ -90,7 +90,7 @@ anti: TESTNET ## Run Antithesis job
 	--arg description   '${description}' \
 	--arg duration      '${duration}' \
 	--arg config_image  '${testnet}_config:latest' \
-	--arg images        '${testnet}:latest;${testnet}_sidecar:latest' \
+	--arg images        '${testnet}:latest;${testnet}_sidecar:latest;${testnet}_tracer:latest' \
 	--arg recipients    '${recipients}' \
 	'{params: {"antithesis.description": $$description,"custom.duration": $$duration,"antithesis.config_image": $$config_image,"antithesis.images": $$images,"antithesis.report.recipients": $$recipients}}')"
 

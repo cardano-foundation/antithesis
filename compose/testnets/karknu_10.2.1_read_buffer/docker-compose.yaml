@@ -13,6 +13,21 @@ x-env: &env
   POOL_ID: "0" # Placeholder required for override
 
 services:
+  tracer:
+    image: ${registry}${testnet}_tracer:latest
+    restart: on-failure
+    hostname: tracer.example
+    container_name: tracer
+    volumes:
+      - tracer:/opt/cardano-tracer
+    ports:
+      - "4000:4000"
+    command:
+       - "--config"
+       - "tracer-config.yaml"
+    build:
+      context: "../../tracer"
+      dockerfile: "Dockerfile"
   p1:
     <<: *base
     container_name: p1
