@@ -113,6 +113,22 @@ RUN git fetch --all --recurse-submodules --tags && \
 RUN echo "package *\n\
   ghc-options: +RTS -A128m -n2m -RTS\n\
 \n\
+package ouroboros-network\n\
+  flags: +reseed\n\
+  ghc-options: -fno-ignore-asserts\n\
+\n\
+package ouroboros-network-framework\n\
+  ghc-options: -fno-ignore-asserts\n\
+\n\
+package ouroboros-network-api\n\
+  ghc-options: -fno-ignore-asserts\n\
+\n\
+package ouroboros-network-protocols\n\
+  ghc-options: -fno-ignore-asserts\n\
+\n\
+package network-mux\n\
+  ghc-options: -fno-ignore-asserts\n\
+\n\
 jobs: \$ncpus\n\
 semaphore: True" > /usr/local/src/cardano-node/cabal.project.local
 
