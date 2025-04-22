@@ -206,6 +206,7 @@ RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && \
 # Install packages required in main stage
 RUN apt update && \
     apt install -y --no-install-recommends \
+        curl \
         dnsutils \
         iproute2 \
         iputils-ping \
