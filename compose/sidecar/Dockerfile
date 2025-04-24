@@ -74,10 +74,11 @@ RUN groupadd --gid 10000 cardano && \
     useradd --comment 'cardano' --create-home --gid 10000 --password '!' --shell '/bin/bash' --uid 10000 cardano
 
 # Create Antithesis directory
-RUN install --directory --owner=cardano --group=cardano --mode=0750 /opt/antithesis/test/v1
+RUN install --directory --owner=cardano --group=cardano --mode=0750 /opt/antithesis/test/v1/convergence
 
 # Copy Antithesis scripts
-COPY composer /opt/antithesis/test/v1/
+COPY composer/convergence/eventually_converged.sh /opt/antithesis/test/v1/convergence
+COPY composer/convergence/serial_driver_sleep.sh /opt/antithesis/test/v1/convergence
 RUN chmod 0755 /opt/antithesis/test/v1/*/*
 
 # Copy sidecar.sh
