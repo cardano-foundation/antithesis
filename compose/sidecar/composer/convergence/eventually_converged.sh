@@ -24,7 +24,7 @@ validate_block_hash() {
     # Fetch hashes in parallel
     for i in $(seq 1 "${POOLS}"); do
         (
-            timeout 10 cardano-cli ping -j --magic 42 --host p${i}.example --port ${PORT} --tip --quiet -c1 | jq -r '.tip[0].hash + " " + (.tip[0].blockNo|tostring) + " " + (.tip[0].slotNo|tostring)' >"$temp_dir/hash_${i}"
+            cardano-cli ping -j --magic 42 --host p${i}.example --port ${PORT} --tip --quiet -c1 | jq -r '.tip[0].hash + " " + (.tip[0].blockNo|tostring) + " " + (.tip[0].slotNo|tostring)' >"$temp_dir/hash_${i}"
         ) &
         pids+=($!)
     done
