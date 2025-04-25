@@ -62,6 +62,7 @@ RUN apt update && \
         netcat-openbsd \
         openssl \
         procps \
+        sudo \
         tcpdump \
         telnet \
         vim
@@ -72,6 +73,10 @@ COPY --from=build --chown=root:root /usr/local/bin/cardano-cli /usr/local/bin/ca
 # Create cardano group and user
 RUN groupadd --gid 10000 cardano && \
     useradd --comment 'cardano' --create-home --gid 10000 --password '!' --shell '/bin/bash' --uid 10000 cardano
+
+# Add cardano to sudoers. Needed for tcpdump in Antithesis environment.
+RUN echo 'cardano ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/cardano && \
+    chmod 0440 /etc/sudoers.d/cardano
 
 # Create Antithesis directory
 RUN install --directory --owner=cardano --group=cardano --mode=0750 /opt/antithesis/test/v1/convergence
