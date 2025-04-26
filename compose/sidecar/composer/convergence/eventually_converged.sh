@@ -33,7 +33,7 @@ validate_block_hash() {
     for (( i=0; i < ${#pids[@]}; i++ )); do
         pid=${pids[$i]}
         if ! wait "$pid"; then
-            j=$(( idx + 1 ))
+            j=$(( i + 1 ))
             echo "Error: Host p${j}.example failed" >&2
             status=2
         fi
