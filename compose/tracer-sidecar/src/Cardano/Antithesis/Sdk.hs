@@ -1,17 +1,38 @@
-{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 module Cardano.Antithesis.Sdk where
 
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
 
-import System.Environment    (lookupEnv)
-import System.IO             (withFile, IOMode(AppendMode))
-import Data.Aeson (Value (Null), encode, (.=), object)
-import Data.Aeson.QQ (aesonQQ)
-import Data.Maybe (fromMaybe)
-import GHC.Stack             (HasCallStack, callStack, getCallStack, SrcLoc(..))
-import Data.Text (Text)
+import Data.Aeson
+    ( Value (Null)
+    , encode
+    , object
+    , (.=)
+    )
+import Data.Aeson.QQ
+    ( aesonQQ
+    )
+import Data.Maybe
+    ( fromMaybe
+    )
+import Data.Text
+    ( Text
+    )
+import GHC.Stack
+    ( HasCallStack
+    , SrcLoc (..)
+    , callStack
+    , getCallStack
+    )
+import System.Environment
+    ( lookupEnv
+    )
+import System.IO
+    ( IOMode (AppendMode)
+    , withFile
+    )
 
 
 -- | Append a JSON Value as one line to $ANTITHESIS_OUTPUT_DIR/sdk.jsonl
@@ -26,12 +47,12 @@ writeSdkJsonl v = do
 
 -- Hard code values for now
 
-sometimesForksDeclaration :: Value
-sometimesForksDeclaration = [aesonQQ|
+sometimesTracesDeclaration :: Text -> Value
+sometimesTracesDeclaration label = [aesonQQ|
 {
   "antithesis_assert": {
-    "id":           "Sometimes forks",
-    "message":      "Sometimes forks",
+    "id":           #{label},
+    "message":      #{label},
     "condition":    false,
     "display_type": "Sometimes",
     "hit":          false,
@@ -49,8 +70,8 @@ sometimesForksDeclaration = [aesonQQ|
 }
 |]
 
-sometimesForksReached :: HasCallStack => Value
-sometimesForksReached =
+sometimesTracesReached :: HasCallStack => Text -> Value
+sometimesTracesReached label =
   let
       ((funcName, loc) : _) = getCallStack callStack
 
@@ -70,8 +91,8 @@ sometimesForksReached =
 
   in object
      [ "antithesis_assert" .= object
-       [ "id"           .= ("Sometimes forks" :: Text)
-       , "message"      .= ("Sometimes forks" :: Text)
+       [ "id"           .= label
+       , "message"      .= label
        , "condition"    .= True
        , "display_type" .= ("Sometimes"     :: Text)
        , "hit"          .= True

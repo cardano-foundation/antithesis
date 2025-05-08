@@ -1,12 +1,14 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.Antithesis.Sidecar where
 
+import qualified Data.Text as T
+
 import Cardano.Antithesis.LogMessage
 import Cardano.Antithesis.Sdk
-
 
 import Control.Arrow
     ( second
@@ -20,22 +22,47 @@ import Data.Aeson
 import Data.List
     ( mapAccumL
     )
+import qualified Data.List as L
+import Data.Set
+    ( Set
+    )
+import qualified Data.Set as Set
+import Data.Text
+    ( Text
+    )
 
 -- State -----------------------------------------------------------------------
 
+type TraceKind = Text
+
 newtype State = State
-  { hasSeenAFork :: Bool -- whether or not any node has seen a fork
+  { scanningFor :: Set TraceKind
   }
 
 initialState :: (State, [Value])
 initialState =
-  (State False, [sometimesForksDeclaration])
+  (State $ Set.fromList kinds, map sometimesTracesDeclaration kinds)
+  where
+    -- | N.B. Currently actually checking the last element of the `ns` field,
+    -- not the `data.kind` field.
+    kinds :: [TraceKind]
+    kinds =
+        [ "SwitchedToAFork"
+        , "PromotedToWarmRemote"
+        , "PromotedToHotRemote"
+        , "DemotedToColdRemote"
+        , "DemotedToWarmRemote"
+        ]
 
 processMessage :: State -> LogMessage -> (State, [Value])
-processMessage state LogMessage{datum} = case (datum, state) of
-  (SwitchedToAFork{}, s@(State False)) -> do
-    (s { hasSeenAFork = True }, [sometimesForksReached])
-  (_, s) -> (s, [])
+processMessage (State scanningFor) LogMessage{ns}
+    | Set.member kind scanningFor =
+        ( State (Set.delete kind scanningFor)
+        , [sometimesTracesReached kind]
+        )
+    | otherwise = (State scanningFor, [])
+  where
+    kind = L.last ns
 
 processMessages :: (State, [Value]) -> [LogMessage] -> (State, [Value])
 processMessages st =
