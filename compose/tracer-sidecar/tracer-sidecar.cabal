@@ -18,8 +18,6 @@ common warnings
 executable tracer-sidecar
     import:           warnings
     main-is:          Main.hs
-    other-modules:    Cardano.Antithesis.LogMessage
-                    , Cardano.Antithesis.Sdk
     -- other-extensions:
     build-depends:    base ^>=4.18.3.0
                     , aeson
@@ -33,6 +31,7 @@ executable tracer-sidecar
                     , stm
                     , generic-lens
                     , optics-core
+                    , tracer-sidecar
     hs-source-dirs:   app
     default-language: Haskell2010
 

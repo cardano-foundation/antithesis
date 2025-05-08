@@ -63,7 +63,7 @@ main = do
            [d] -> return d
            _   -> error "Usage: <executable name> <directory>"
 
-  mvar <- newMVar =<< initialState
+  mvar <- newMVar =<< initialStateIO
 
   threadDelay 2000000 -- allow log files to be created
   files <- jsonFiles dir
@@ -71,7 +71,7 @@ main = do
   putStrLn $ "Observing .jsonl files: " <> show files
 
   forM_ files $ \file ->
-    forkIO $ tailJsonLines file (modifyMVar_ mvar . processMessage)
+    forkIO $ tailJsonLines file (modifyMVar_ mvar . flip processMessageIO)
   forever $ threadDelay maxBound
 
 -- utils -----------------------------------------------------------------------
