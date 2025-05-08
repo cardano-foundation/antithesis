@@ -1,27 +1,54 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 
-{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
 module Main where
 
-import LogMessage
-import Antithesis
+import Cardano.Antithesis.LogMessage
+import Cardano.Antithesis.Sidecar
 
-import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B8
+import qualified Data.ByteString.Lazy as BL
 
+import Control.Concurrent
+    ( forkIO
+    , modifyMVar_
+    , newMVar
+    , threadDelay
+    )
+import Control.Monad
+    ( filterM
+    , forM
+    , forM_
+    , forever
+    , unless
+    )
+import Data.Aeson
+    ( eitherDecode
+    )
 import System.Directory
-    ( listDirectory, doesDirectoryExist, doesFileExist, listDirectory )
+    ( doesDirectoryExist
+    , doesFileExist
+    , listDirectory
+    )
+import System.Environment
+    ( getArgs
+    )
 import System.FilePath
-    ( (</>), takeExtension, (</>), takeExtension )
-import System.IO (withFile, BufferMode (NoBuffering), hSetBuffering, hIsEOF, IOMode(ReadMode), hSetBuffering, BufferMode(LineBuffering), stdout)
-import Control.Monad (forM, forM_, filterM, unless, forever)
-import System.Environment (getArgs)
-import Control.Concurrent (forkIO, threadDelay, modifyMVar_, newMVar)
-import Data.Aeson (eitherDecode)
+    ( takeExtension
+    , (</>)
+    )
+import System.IO
+    ( BufferMode (LineBuffering, NoBuffering)
+    , IOMode (ReadMode)
+    , hIsEOF
+    , hSetBuffering
+    , stdout
+    , withFile
+    )
 
 -- main ------------------------------------------------------------------------
 
@@ -47,24 +74,6 @@ main = do
     forkIO $ tailJsonLines file (modifyMVar_ mvar . processMessage)
   forever $ threadDelay maxBound
 
--- State -----------------------------------------------------------------------
-
-newtype State = State
-  { hasSeenAFork :: Bool -- whether or not any node has seen a fork
-  }
-
-initialState :: IO State
-initialState = do
-  writeSdkJsonl sometimesForksDeclaration
-  return $ State False
-
-processMessage :: LogMessage -> State -> IO State
-processMessage LogMessage{datum} state = case (datum, state) of
-  (SwitchedToAFork{}, s@(State False)) -> do
-    writeSdkJsonl sometimesForksReached
-    return $ s { hasSeenAFork = True }
-  (_, s) -> return s
-
 -- utils -----------------------------------------------------------------------
 
 -- | Recursively find .json files in a directory
@@ -85,7 +94,7 @@ tailJsonLines :: FilePath -> (LogMessage -> IO ()) -> IO ()
 tailJsonLines path action = tailLines path $ \bs ->
   case eitherDecode $ BL.fromStrict bs of
       Right msg -> action msg
-      Left _e -> pure () -- putStrLn $ "warning: unrecognized line: " <> B8.unpack bs <> " " <> show e
+      Left _e   -> pure () -- putStrLn $ "warning: unrecognized line: " <> B8.unpack bs <> " " <> show e
 
 tailLines :: FilePath -> (B8.ByteString -> IO ()) -> IO ()
 tailLines path callback = withFile path ReadMode $ \h -> do
@@ -102,4 +111,3 @@ tailLines path callback = withFile path ReadMode $ \h -> do
       if eof
          then threadDelay 100000
          else B8.hGetLine h >>= callback
-
