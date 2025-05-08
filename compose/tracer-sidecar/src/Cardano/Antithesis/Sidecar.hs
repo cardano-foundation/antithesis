@@ -1,6 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -14,14 +11,14 @@ import Cardano.Antithesis.Sdk
 import Control.Arrow
     ( second
     )
+import Control.Monad
+    ( forM_
+    )
 import Data.Aeson
     ( Value
     )
 import Data.List
     ( mapAccumL
-    )
-import Data.Maybe
-    ( catMaybes
     )
 
 -- State -----------------------------------------------------------------------
@@ -30,33 +27,30 @@ newtype State = State
   { hasSeenAFork :: Bool -- whether or not any node has seen a fork
   }
 
-
-initialState :: (State, Maybe Value)
+initialState :: (State, [Value])
 initialState =
-  (State False, Just sometimesForksDeclaration)
+  (State False, [sometimesForksDeclaration])
 
-processMessage :: State -> LogMessage -> (State, Maybe Value)
+processMessage :: State -> LogMessage -> (State, [Value])
 processMessage state LogMessage{datum} = case (datum, state) of
   (SwitchedToAFork{}, s@(State False)) -> do
-    (s { hasSeenAFork = True }, Just sometimesForksReached)
-  (_, s) -> (s, Nothing)
+    (s { hasSeenAFork = True }, [sometimesForksReached])
+  (_, s) -> (s, [])
 
-processMessages :: (State, Maybe Value) -> [LogMessage] -> (State, [Value])
+processMessages :: (State, [Value]) -> [LogMessage] -> (State, [Value])
 processMessages st =
-    second (catMaybes . (v:))
+    second (concat . (v:))
   . mapAccumL processMessage s
   where
     (s, v) = st
 
 -- IO --------------------------------------------------------------------------
 
-hoistToIO :: (State, Maybe Value) -> IO State
-hoistToIO (s, Just v) = writeSdkJsonl v >> return s
-hoistToIO (s, _     ) = return s
+hoistToIO :: (State, [Value]) -> IO State
+hoistToIO (s, vals) = forM_ vals writeSdkJsonl >> return s
 
 initialStateIO :: IO State
 initialStateIO = hoistToIO initialState
 
 processMessageIO :: State -> LogMessage -> IO State
 processMessageIO s msg = hoistToIO $ processMessage s msg
-
