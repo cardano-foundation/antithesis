@@ -191,13 +191,17 @@ main() {
     assemble_command
     "${cmd[@]}"
     exit_code=$?
-    if [ ${exit_code} -eq 1 ]; then
-        echo "exit code: 0"
-        exit 0
-    else
-        echo "exit code: ${exit_code}"
-        exit ${?}
-    fi
+
+    # XXX Depends on cardano-node hack.
+    echo "exit code: ${exit_code}"
+    exit ${exit_code}
+#    if [ ${exit_code} -eq 1 ]; then
+#        echo "exit code: 0"
+#        exit 0
+#    else
+#        echo "exit code: ${exit_code}"
+#        exit ${exit_code}
+#    fi
 }
 
 main
