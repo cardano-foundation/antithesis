@@ -65,7 +65,7 @@ TraceLocalConnectionManager: false
 TraceLocalHandshake: false
 TraceLocalRootPeers: false
 TracePeerSelection: true
-TracePeerSelectionActions: false
+TracePeerSelectionActions: true
 TracePublicRootPeers: false
 TraceServer: true
 TurnOnLogMetrics: false
