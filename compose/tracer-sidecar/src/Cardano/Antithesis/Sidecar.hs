@@ -43,26 +43,19 @@ initialState :: (State, [Value])
 initialState =
   (State $ Set.fromList kinds, map sometimesTracesDeclaration kinds)
   where
-    -- | N.B. Currently actually checking the last element of the `ns` field,
-    -- not the `data.kind` field.
     kinds :: [TraceKind]
     kinds =
-        [ "SwitchedToAFork"
-        , "PromotedToWarmRemote"
-        , "PromotedToHotRemote"
-        , "DemotedToColdRemote"
-        , "DemotedToWarmRemote"
+        [ "TraceAddBlockEvent.SwitchedToAFork"
+        , "PeerStatusChanged"
         ]
 
 processMessage :: State -> LogMessage -> (State, [Value])
-processMessage (State scanningFor) LogMessage{ns}
+processMessage (State scanningFor) LogMessage{kind}
     | Set.member kind scanningFor =
         ( State (Set.delete kind scanningFor)
         , [sometimesTracesReached kind]
         )
     | otherwise = (State scanningFor, [])
-  where
-    kind = L.last ns
 
 processMessages :: (State, [Value]) -> [LogMessage] -> (State, [Value])
 processMessages st =

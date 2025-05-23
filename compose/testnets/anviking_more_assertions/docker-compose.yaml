@@ -1,0 +1,92 @@
+---
+
+x-base: &base
+  image: ${registry}${testnet}:latest
+  restart: on-failure
+  build:
+    context: "../../"
+    dockerfile: "Dockerfile.source"
+    args:
+      CARDANO_NODE_REF: "karknu/10_1_4_anthithesis_sigterm"
+
+x-env: &env
+  POOL_ID: "0" # Placeholder required for override
+
+services:
+  p1:
+    <<: *base
+    container_name: p1
+    hostname: p1.example
+    volumes:
+      - p1:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
+    ports:
+      - "3001:3001"
+    environment:
+      <<: *env
+      POOL_ID: "1"
+
+  p2:
+    <<: *base
+    container_name: p2
+    hostname: p2.example
+    volumes:
+      - p2:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
+    ports:
+      - "3002:3001"
+    environment:
+      <<: *env
+      POOL_ID: "2"
+      PEER_SHARING: "false"
+
+  p3:
+    <<: *base
+    container_name: p3
+    hostname: p3.example
+    volumes:
+      - p3:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
+    ports:
+      - "3003:3001"
+    environment:
+      <<: *env
+      POOL_ID: "3"
+
+  s1:
+    image: ${registry}${testnet}_sidecar:latest
+    restart: on-failure
+    container_name: s1
+    hostname: s1.example
+    environment:
+      POOLS: "3"
+  tracer:
+    image: ${registry}${testnet}_tracer:latest
+    restart: on-failure
+    hostname: tracer.example
+    container_name: tracer
+    volumes:
+      - tracer:/opt/cardano-tracer
+    ports:
+      - "4000:4000"
+    command:
+       - "--config"
+       - "tracer-config.yaml"
+    build:
+      context: "../../tracer"
+      dockerfile: "Dockerfile"
+  tracer-sidecar:
+    image: ${registry}${testnet}_tracer-sidecar:latest
+    restart: on-failure
+    container_name: tracer-sidecar
+    hostname: tracer-sidecar.example
+    environment:
+      POOLS: "3"
+    volumes:
+      - tracer:/opt/cardano-tracer
+
+volumes:
+  tracer:
+  p1:
+  p2:
+  p3:
