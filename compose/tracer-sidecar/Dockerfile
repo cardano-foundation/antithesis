@@ -1,4 +1,4 @@
-FROM haskell:9.6 AS build
+FROM haskell:9.6
 
 WORKDIR /opt/tracer-sidecar
 
@@ -16,8 +16,4 @@ RUN cabal build --only-dependencies -j4
 COPY . /opt/tracer-sidecar
 RUN cabal install
 
-FROM docker.io/debian:stable-slim AS main
-
-COPY --from=build /root/.local/bin/tracer-sidecar /usr/local/bin/tracer-sidecar
-
-CMD ["/usr/local/tracer-sidecar", "/opt/cardano-tracer"]
+CMD ["tracer-sidecar", "/opt/cardano-tracer"]
