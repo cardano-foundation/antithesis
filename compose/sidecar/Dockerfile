@@ -51,6 +51,7 @@ RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && \
 # Install packages required in main stage
 RUN apt update && \
     apt install -y --no-install-recommends \
+        curl \
         dnsutils \
         iproute2 \
         iputils-ping \
@@ -61,6 +62,7 @@ RUN apt update && \
         netcat-openbsd \
         openssl \
         procps \
+        sudo \
         tcpdump \
         telnet \
         vim
@@ -72,11 +74,16 @@ COPY --from=build --chown=root:root /usr/local/bin/cardano-cli /usr/local/bin/ca
 RUN groupadd --gid 10000 cardano && \
     useradd --comment 'cardano' --create-home --gid 10000 --password '!' --shell '/bin/bash' --uid 10000 cardano
 
+# Add cardano to sudoers. Needed for tcpdump in Antithesis environment.
+RUN echo 'cardano ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/cardano && \
+    chmod 0440 /etc/sudoers.d/cardano
+
 # Create Antithesis directory
-RUN install --directory --owner=cardano --group=cardano --mode=0750 /opt/antithesis/test/v1
+RUN install --directory --owner=cardano --group=cardano --mode=0750 /opt/antithesis/test/v1/convergence
 
 # Copy Antithesis scripts
-COPY composer /opt/antithesis/test/v1/
+COPY composer/convergence/eventually_converged.sh /opt/antithesis/test/v1/convergence
+COPY composer/convergence/serial_driver_sleep.sh /opt/antithesis/test/v1/convergence
 RUN chmod 0755 /opt/antithesis/test/v1/*/*
 
 # Copy sidecar.sh

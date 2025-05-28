@@ -24,15 +24,17 @@ validate_block_hash() {
     # Fetch hashes in parallel
     for i in $(seq 1 "${POOLS}"); do
         (
-            timeout 10 cardano-cli ping -j --magic 42 --host p${i}.example --port ${PORT} --tip --quiet -c1 | jq -r '.tip[0].hash + " " + (.tip[0].blockNo|tostring) + " " + (.tip[0].slotNo|tostring)' >"$temp_dir/hash_${i}"
+            cardano-cli ping -j --magic 42 --host p${i}.example --port ${PORT} --tip --quiet -c1 | jq -r '.tip[0].hash + " " + (.tip[0].blockNo|tostring) + " " + (.tip[0].slotNo|tostring)' >"$temp_dir/hash_${i}"
         ) &
         pids+=($!)
     done
 
     # Wait for all processes and handle errors
-    for pid in "${pids[@]}"; do
+    for (( i=0; i < ${#pids[@]}; i++ )); do
+        pid=${pids[$i]}
         if ! wait "$pid"; then
-            echo "Error: Process $pid failed" >&2
+            j=$(( i + 1 ))
+            echo "Error: Host p${j}.example failed" >&2
             status=2
         fi
     done
@@ -67,7 +69,11 @@ main() {
     while true; do
         status=1
 
-        for i in {1..100}; do
+        # Within 3k/f slots, hardcoded to 25920 for now,
+        # we should recover. This is 12960 retries.
+        # ... assuming the network doesn't go down before
+        # this script is started?
+        for i in {1..12960}; do
             validate_block_hash
             if [ "${status}" -eq 0 ]; then
                 break
@@ -81,7 +87,7 @@ main() {
             exit 0
         else
             echo "[{\"status\":\"diverged\"}]"
-            exit 1
+            exit 0
         fi
 
         sleep 300

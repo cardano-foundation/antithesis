@@ -18,6 +18,6 @@ RUN cabal install
 
 FROM docker.io/debian:stable-slim AS main
 
-COPY --from=build /root/.local/bin/tracer-sidecar /usr/local/bin/tracer-sidecar
+COPY --from=build /root/.local/bin/tracer-sidecar /usr/local/tracer-sidecar
 
 CMD ["/usr/local/tracer-sidecar", "/opt/cardano-tracer"]
