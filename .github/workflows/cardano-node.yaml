@@ -13,6 +13,11 @@ on:
         required: true
         default: cardano_node_10.4.1
         type: string
+       duration:
+        description: 'Test duration (in hours)'
+        required: false
+        default: 5
+        type: number
   schedule:
     # run every 6 hours
     - cron:  '5 1,7,13,19 * * *'
@@ -70,4 +75,4 @@ jobs:
         email_recipients: ${{ env.EMAILS }}
         test_name: "${{ inputs.test || env.TESTNET }}"
         additional_parameters: |-
-          duration=${{ env.DURATION }}
+          duration=${{ inputs.duration || env.DURATION }}
