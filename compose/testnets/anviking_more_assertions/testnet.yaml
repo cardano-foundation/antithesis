@@ -1,0 +1,135 @@
+--- # Required Testnet Parameters
+poolCount: 3
+poolCost: 340000000
+poolMargin: 0.0
+poolPledge: 0
+delegatedSupply: 600000000000000
+systemStart: 'now'
+systemStartDelay: 5
+networkMagic: 42
+testnetDomain: example
+
+--- # Optional Byron Genesis Overide
+protocolConsts:
+  k: 432
+
+--- # Optional Shelley Genesis Overide
+epochLength: 86400
+securityParam: 432
+maxLovelaceSupply: 45000000000000000
+protocolParams:
+  decentralisationParam: 0
+  protocolVersion:
+    major: 10
+    minor: 0
+
+--- # Optional Alonzo Genesis Overide
+
+--- # Optional Conway Genesis Overide
+
+--- # Optional Node Config Overide
+ExperimentalHardForksEnabled: true
+ExperimentalProtocolsEnabled: true
+LastKnownBlockVersion-Alt: 0
+LastKnownBlockVersion-Major: 6
+LastKnownBlockVersion-Minor: 0
+MaxConcurrencyBulkSync: 2
+MaxConcurrencyDeadline: 4
+MaxKnownMajorProtocolVersion: 2
+PeerSharing: true
+TargetNumberOfActiveBigLedgerPeers: 2
+TargetNumberOfActivePeers: 3
+TargetNumberOfEstablishedBigLedgerPeers: 3
+TargetNumberOfEstablishedPeers: 3
+TargetNumberOfKnownBigLedgerPeers: 10
+TargetNumberOfKnownPeers: 30
+TargetNumberOfRootPeers: 10
+TestAllegraHardForkAtEpoch: 0
+TestAlonzoHardForkAtEpoch: 0
+TestBabbageHardForkAtEpoch: 0
+TestConwayHardForkAtEpoch: 0
+TestMaryHardForkAtEpoch: 0
+TestShelleyHardForkAtEpoch: 0
+TraceConnectionManager: true
+TraceConnectionManagerTransitions: false
+TraceDNSResolver: false
+TraceDNSSubscription: false
+TraceDebugPeerSelection: false
+TraceForge: true 
+TraceForgeStateInfo: true 
+TraceHandshake: true 
+TraceInboundGovernor: false
+TraceIpSubscription: false
+TraceLedgerPeers: true
+TracePeerStateActions: true
+TracePeerSelectionActions: true
+TracePeerSelection: True
+TraceLocalConnectionManager: false
+TraceLocalHandshake: false
+TraceLocalRootPeers: false
+TracePeerSelection: true
+TracePeerSelectionActions: true
+TracePublicRootPeers: false
+TraceServer: true
+TurnOnLogMetrics: false
+UseTraceDispatcher: true
+TraceOptionForwarder:
+  connQueueSize: 64
+  disconnQueueSize: 128
+  maxReconnectDeplay: 30
+TraceOptions:
+  '':
+    backends:
+    - EKGBackend
+    - Forwarder
+    detail: DNormal
+    severity: Notice
+  BlockFetch.Client.CompletedBlockFetch:
+    maxFrequency: 2
+  BlockFetch.Decision:
+    severity: Silence
+  ChainDB:
+    severity: Info
+  ChainDB.AddBlockEvent.AddBlockValidation:
+    severity: Silence
+  ChainDB.AddBlockEvent.AddBlockValidation.ValidCandidate:
+    maxFrequency: 2
+  ChainDB.AddBlockEvent.AddedBlockToQueue:
+    maxFrequency: 2
+  ChainDB.AddBlockEvent.AddedBlockToVolatileDB:
+    maxFrequency: 2
+  ChainDB.CopyToImmutableDBEvent.CopiedBlockToImmutableDB:
+    maxFrequency: 2
+  ChainSync.Client:
+    severity: Warning
+  
+  Forge.Loop:
+    severity: Info
+  Forge.StateInfo:
+    severity: Info
+  Mempool:
+    severity: Silence
+  Net.ConnectionManager.Remote:
+    severity: Info
+  Net.ConnectionManager.Remote.ConnectionManagerCounters:
+    severity: Silence
+  Net.PeerSelection.Actions:
+    severity: Info
+  Net.ErrorPolicy:
+    severity: Info
+  Net.ErrorPolicy.Local:
+    severity: Info
+  Net.InboundGovernor:
+    severity: Silence 
+  Net.Mux.Remote:
+    severity: Info
+  Net.PeerSelection:
+    severity: Silence
+  Net.Subscription.DNS:
+    severity: Info
+  Net.Subscription.IP:
+    severity: Info
+  Resources:
+    severity: Silence
+  Startup.DiffusionInit:
+    severity: Info
