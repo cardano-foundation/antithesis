@@ -1,7 +1,12 @@
-FROM docker.io/debian:stable-slim AS build
-
-ARG CARDANO_NODE_VERSION="${CARDANO_NODE_VERSION:-10.2.1}"
+ARG CARDANO_CLI_VERSION="${CARDANO_CLI_VERSION:-10.8.0.0}"
+ARG CARDANO_NODE_VERSION="${CARDANO_NODE_VERSION:-10.4.1}"
 ARG UV_VERSION="${UV_VERSION:-0.6.11}"
+# Blink Labs images are built from source on Debian Bookworm
+FROM ghcr.io/blinklabs-io/cardano-cli:${CARDANO_CLI_VERSION} AS cardano-cli
+FROM ghcr.io/blinklabs-io/cardano-node:${CARDANO_NODE_VERSION} AS cardano-node
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
+
+FROM docker.io/debian:stable-slim AS build
 
 # Set time zone
 ENV TZ="UTC"
@@ -16,53 +21,17 @@ RUN apt update && \
         git \
         tar
 
+# Copy cardano-cli from image
+COPY --from=cardano-cli --chown=root:root /usr/local/bin/cardano-cli /usr/local/bin/cardano-cli
+# Copy cardano-node from image
+COPY --from=cardano-node --chown=root:root /usr/local/bin/cardano-node /usr/local/bin/cardano-node
+# Copy libsecp256k1 (also debian:bookwork-slim AKA stable-slim)
+COPY --from=cardano-node --chown=root:root /usr/local/lib/ /usr/local/lib/
+# Copy uv from image
+COPY --from=uv --chown=root:root /uv /usr/local/bin/uv
+
 # Create cardano-node source directory
 RUN install --directory --owner=root --group=root --mode=0755 /usr/local/src/cardano-node
-
-# Download cardano-node archive
-RUN curl --proto '=https' --tlsv1.2 \
-        --location https://github.com/IntersectMBO/cardano-node/releases/download/${CARDANO_NODE_VERSION}/cardano-node-${CARDANO_NODE_VERSION}-linux.tar.gz \
-        --output /usr/local/src/cardano-node/cardano-node-${CARDANO_NODE_VERSION}-linux.tar.gz
-
-# Create cardano-node version directory
-RUN install --directory --owner=root --group=root --mode=0755 /usr/local/src/cardano-node/${CARDANO_NODE_VERSION}
-
-# Unarchive cardano-node tarball
-RUN tar --extract --gzip --file=/usr/local/src/cardano-node/cardano-node-${CARDANO_NODE_VERSION}-linux.tar.gz --directory=/usr/local/src/cardano-node/${CARDANO_NODE_VERSION}
-
-# Make cardano-cli executable
-RUN chmod 0755 /usr/local/src/cardano-node/${CARDANO_NODE_VERSION}/bin/cardano-cli \
-        /usr/local/src/cardano-node/${CARDANO_NODE_VERSION}/bin/cardano-node
-
-# Create cardano-cli symlink
-RUN ln -s /usr/local/src/cardano-node/${CARDANO_NODE_VERSION}/bin/cardano-cli /usr/local/bin/cardano-cli && \
-    ln -s /usr/local/src/cardano-node/${CARDANO_NODE_VERSION}/bin/cardano-node /usr/local/bin/cardano-node
-
-# Create uv source directory
-RUN install --directory --owner=root --group=root --mode=0755 /usr/local/src/uv
-
-# Download uv archive
-RUN curl --proto '=https' --tlsv1.2 \
-        --location https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz \
-        --output /usr/local/src/uv/uv-x86_64-unknown-linux-gnu.tar.gz
-
-# Download uv checksum
-RUN curl --proto '=https' --tlsv1.2 \
-        --location https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz.sha256 \
-        --output /usr/local/src/uv/uv-x86_64-unknown-linux-gnu.tar.gz.sha256
-
-# Verify uv checksum
-WORKDIR /usr/local/src/uv
-RUN sha256sum --ignore-missing --check uv-x86_64-unknown-linux-gnu.tar.gz.sha256
-
-# Unarchive uv tarball
-RUN tar --extract --gzip --file=/usr/local/src/uv/uv-x86_64-unknown-linux-gnu.tar.gz --directory=/usr/local/src/uv
-
-# Make uv executable
-RUN chmod 0755 /usr/local/src/uv/uv-x86_64-unknown-linux-gnu/uv
-
-# Create uv symlink
-RUN ln -s /usr/local/src/uv/uv-x86_64-unknown-linux-gnu/uv /usr/local/bin/uv
 
 # Clone testnet-generation-tool.git repository
 WORKDIR /usr/local/src
@@ -110,9 +79,11 @@ RUN apt update && \
         telnet \
         vim
 
-# Copy binaries from build stage
+# Copy binaries/libraries from build stage
 COPY --from=build --chown=root:root /usr/local/bin/cardano-cli /usr/local/bin/cardano-cli
 COPY --from=build --chown=root:root /usr/local/bin/cardano-node /usr/local/bin/cardano-node
+# Stick this into existing LD_LIBRARY_PATH
+COPY --from=build --chown=root:root /usr/local/lib/ /usr/lib/
 
 # Create cardano group and user
 RUN groupadd --gid 10000 cardano && \

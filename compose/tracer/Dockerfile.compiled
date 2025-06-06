@@ -1,43 +1,11 @@
-FROM docker.io/debian:stable-slim AS build
-
-ARG CARDANO_NODE_VERSION="${CARDANO_NODE_VERSION:-10.2.1}"
-
-# Set time zone
-ENV TZ="UTC"
-RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && \
-    echo ${TZ} > /etc/timezone
-
-# Install packages required in build stage
-RUN apt update && \
-    apt install -y --no-install-recommends \
-        ca-certificates \
-        curl \
-        git \
-        tar
-
-# Create cardano-node source directory
-RUN install --directory --owner=root --group=root --mode=0755 /usr/local/src/cardano-node
-
-# Download cardano-node archive
-RUN curl --proto '=https' --tlsv1.2 \
-        --location https://github.com/IntersectMBO/cardano-node/releases/download/${CARDANO_NODE_VERSION}/cardano-node-${CARDANO_NODE_VERSION}-linux.tar.gz \
-        --output /usr/local/src/cardano-node/cardano-node-${CARDANO_NODE_VERSION}-linux.tar.gz
-
-# Create cardano-node version directory
-RUN install --directory --owner=root --group=root --mode=0755 /usr/local/src/cardano-node/${CARDANO_NODE_VERSION}
-
-# Unarchive cardano-node tarball
-RUN tar --extract --gzip --file=/usr/local/src/cardano-node/cardano-node-${CARDANO_NODE_VERSION}-linux.tar.gz --directory=/usr/local/src/cardano-node/${CARDANO_NODE_VERSION}
-
-# Make cardano-tracer executable
-RUN chmod 0755 /usr/local/src/cardano-node/${CARDANO_NODE_VERSION}/bin/cardano-tracer
-
-# Create cardano-cli symlink
-RUN ln -s /usr/local/src/cardano-node/${CARDANO_NODE_VERSION}/bin/cardano-tracer /usr/local/bin/cardano-tracer
-
-#---------------------------------------------------------------------
+ARG CARDANO_NODE_VERSION="${CARDANO_NODE_VERSION:-10.4.1}"
+# Blink Labs images are built from source on Debian Bookworm
+FROM ghcr.io/blinklabs-io/cardano-node:${CARDANO_NODE_VERSION} AS cardano-tracer
 
 FROM docker.io/debian:stable-slim AS main
+
+# Set environment variables
+ENV CARDANO_TRACER_SOCKET_PATH="/opt/cardano-tracer/tracer.socket"
 
 # Set time zone
 ENV TZ="UTC"
@@ -61,8 +29,10 @@ RUN apt update && \
         telnet \
         vim
 
-# Copy binary from build stage
-COPY --from=build --chown=root:root /usr/local/bin/cardano-tracer /usr/local/bin/cardano-tracer
+# Copy binary from image
+COPY --from=cardano-tracer --chown=root:root /usr/local/bin/cardano-tracer /usr/local/bin/cardano-tracer
+# Copy libsecp256k1/libsodium (also debian:bookwork-slim AKA stable-slim)
+COPY --from=cardano-tracer --chown=root:root /usr/local/lib/ /usr/lib/
 
 # Create cardano group and user
 RUN groupadd --gid 10000 cardano && \
