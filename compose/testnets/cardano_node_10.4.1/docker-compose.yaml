@@ -17,7 +17,7 @@ x-tracer-base: &tracerbase
     # ideally we would like to use a precompiled version of the tracer
     # but unfortunately it's not yet packaged in archives
     # https://github.com/IntersectMBO/cardano-node/issues/6228
-    dockerfile: "Dockerfile"
+    dockerfile: "Dockerfile.compiled"
     args:
       CARDANO_NODE_REF: "10.4.1"
 

@@ -60,7 +60,7 @@ build-sidecar: TESTNET ## Build sidecar container image
 	docker build -f sidecar/Dockerfile -t ${registry}${testnet}_sidecar:latest sidecar/
 
 build-tracer: TESTNET ## Build tracer container image
-	docker build -f tracer/Dockerfile -t ${registry}${testnet}_tracer:latest tracer/
+	docker build -f tracer/Dockerfile.compiled -t ${registry}${testnet}_tracer:latest tracer/
 
 build-tracer-sidecar: TESTNET ## Build tracer container image
 	docker build -f tracer-sidecar/Dockerfile -t ${registry}${testnet}_tracer-sidecar:latest tracer-sidecar/
