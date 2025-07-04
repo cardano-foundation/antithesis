@@ -1,0 +1,153 @@
+---
+
+x-base: &base
+  image: ${registry}${testnet}:latest
+  restart: on-failure
+  build:
+    context: "../../"
+    dockerfile: "Dockerfile.compiled"
+    args:
+      CARDANO_NODE_VERSION: "10.4.1"
+
+x-tracer-base: &tracerbase
+  image: ${registry}${testnet}_tracer:latest
+  restart: on-failure
+  build:
+    context: "../../tracer/"
+    # ideally we would like to use a precompiled version of the tracer
+    # but unfortunately it's not yet packaged in archives
+    # https://github.com/IntersectMBO/cardano-node/issues/6228
+    dockerfile: "Dockerfile.compiled"
+    args:
+      CARDANO_NODE_REF: "10.4.1"
+
+x-env: &env
+  POOL_ID: "0" # Placeholder required for override
+  UTXO_HD_WITH: "mem"
+
+services:
+  tracer:
+    <<: *tracerbase
+    hostname: tracer.example
+    container_name: tracer
+    volumes:
+      - tracer:/opt/cardano-tracer
+    ports:
+      - "4000:4000"
+    command:
+       - "--config"
+       - "tracer-config.yaml"
+
+  d1:
+    <<: *base
+    image: ${registry}${testnet}_dingo:latest
+    restart: on-failure
+    hostname: d1.example
+    container_name: d1
+    build:
+      context: "../../"
+      dockerfile: "Dockerfile.dingo"
+      args:
+        DINGO_VERSION: '0.12.0'
+    volumes:
+      - d1:/data/db
+    ports:
+      - "3000:3001"
+      - "9090:9090"
+    environment:
+      <<: *env
+
+  p1:
+    <<: *base
+    container_name: p1
+    hostname: p1.example
+    volumes:
+      - p1:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
+    ports:
+      - "3001:3001"
+    environment:
+      <<: *env
+      POOL_ID: "1"
+      UTXO_HD_WITH: "hd"
+
+  p2:
+    <<: *base
+    container_name: p2
+    hostname: p2.example
+    volumes:
+      - p2:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
+    ports:
+      - "3002:3001"
+    environment:
+      <<: *env
+      POOL_ID: "2"
+
+  p3:
+    <<: *base
+    container_name: p3
+    hostname: p3.example
+    volumes:
+      - p3:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
+    ports:
+      - "3003:3001"
+    environment:
+      <<: *env
+      POOL_ID: "3"
+
+  p4:
+    <<: *base
+    container_name: p4
+    hostname: p4.example
+    volumes:
+      - p4:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
+    ports:
+      - "3004:3001"
+    environment:
+      <<: *env
+      POOL_ID: "4"
+      UTXO_HD_WITH: "hd"
+
+
+  p5:
+    <<: *base
+    container_name: p5
+    hostname: p5.example
+    volumes:
+      - p5:/opt/cardano-node/data
+      - tracer:/opt/cardano-tracer
+    ports:
+      - "3005:3001"
+    environment:
+      <<: *env
+      POOL_ID: "5"
+
+  s1:
+    image: ${registry}${testnet}_sidecar:latest
+    restart: on-failure
+    container_name: s1
+    hostname: s1.example
+    environment:
+      POOLS: "5"
+
+  tracer-sidecar:
+    image: ${registry}${testnet}_tracer-sidecar:latest
+    restart: on-failure
+    container_name: tracer-sidecar
+    hostname: tracer-sidecar.example
+    environment:
+      POOLS: "5"
+    volumes:
+      - tracer:/opt/cardano-tracer
+
+volumes:
+  tracer:
+  d1:
+  p1:
+  p2:
+  p3:
+  p4:
+  p5:

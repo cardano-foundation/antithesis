@@ -1,0 +1,100 @@
+ARG CARDANO_CLI_VERSION="${CARDANO_CLI_VERSION:-10.8.0.0}"
+ARG CARDANO_NODE_VERSION="${CARDANO_NODE_VERSION:-10.4.1}"
+ARG DINGO_VERSION="${DINGO_VERSION:-0.12.0}"
+ARG UV_VERSION="${UV_VERSION:-0.6.11}"
+# Blink Labs images are built from source on Debian Bookworm
+FROM ghcr.io/blinklabs-io/cardano-cli:${CARDANO_CLI_VERSION} AS cardano-cli
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
+
+FROM ghcr.io/blinklabs-io/cardano-node:${CARDANO_NODE_VERSION} AS build
+
+# Set time zone
+ENV TZ="UTC"
+RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && \
+    echo ${TZ} > /etc/timezone
+
+# Install packages required in build stage
+RUN apt update && \
+    apt install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        git \
+        tar
+
+# Copy cardano-cli from image
+COPY --from=cardano-cli --chown=root:root /usr/local/bin/cardano-cli /usr/local/bin/cardano-cli
+# Copy uv from image
+COPY --from=uv --chown=root:root /uv /usr/local/bin/uv
+
+# Create cardano-node source directory
+RUN install --directory --owner=root --group=root --mode=0755 /usr/local/src/cardano-node
+
+# Clone testnet-generation-tool.git repository
+WORKDIR /usr/local/src
+RUN git clone --branch main https://github.com/cardano-foundation/testnet-generation-tool.git
+
+# Download testnet-generation-tool dependencies
+WORKDIR /usr/local/src/testnet-generation-tool
+RUN uv sync
+
+# Copy testnet.yaml specification
+COPY --chown=root:root .testnet.yaml /usr/local/src/testnet-generation-tool/testnet.yaml
+
+# Build testnet configuration files
+RUN uv run python3 genesis-cli.py testnet.yaml -o /tmp/testnet -c generate
+
+# Remove dynamic topology.json
+RUN find /tmp/testnet -type f -name 'topology.json' -exec rm -f '{}' ';'
+
+# Delete ftsSeed (dingo requires a string, currently)
+RUN find /tmp/testnet -type f -name 'byron-genesis.json' -exec sed -i '/ftsSeed/d' '{}' ';'
+
+#---------------------------------------------------------------------
+
+FROM ghcr.io/blinklabs-io/dingo:${DINGO_VERSION}
+
+# Set time zone
+ENV TZ="UTC"
+RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && \
+    echo ${TZ} > /etc/timezone
+
+# Install packages required in main stage
+RUN apt update && \
+    apt install -y --no-install-recommends \
+        dnsutils \
+        iproute2 \
+        iputils-ping \
+        jq \
+        less \
+        lsof \
+        netbase \
+        netcat-openbsd \
+        openssl \
+        procps \
+        tcpdump \
+        telnet \
+        vim
+
+# Create cardano group and user
+RUN groupadd --gid 10000 cardano && \
+    useradd --comment 'cardano' --create-home --gid 10000 --password '!' --shell '/bin/bash' --uid 10000 cardano
+
+# Create cardano-node directories
+RUN install --directory --owner=root --group=root --mode=0755 /opt/cardano-node && \
+    install --directory --owner=cardano --group=cardano --mode=0750 /opt/cardano-node/config && \
+    install --directory --owner=cardano --group=cardano --mode=0750 /opt/cardano-node/data && \
+    install --directory --owner=cardano --group=cardano --mode=0750 /opt/cardano-node/data/db && \
+    install --directory --owner=cardano --group=cardano --mode=0750 /opt/cardano-node/log && \
+    install --directory --owner=cardano --group=cardano --mode=0750 /opt/cardano-node/pools
+
+# Copy pool config and key material
+COPY --from=build --chown=cardano:cardano /tmp/testnet/pools /opt/cardano-node/pools
+
+# Copy dingo.sh
+COPY dingo.sh /
+RUN chmod 0755 /dingo.sh
+
+USER cardano
+#STOPSIGNAL SIGINT
+
+ENTRYPOINT ["/dingo.sh"]
