@@ -10,4 +10,4 @@ A 5 pools testnet using cardano-node version 10.4.1 testing consistency between 
 
 ## Testnet
 
-- **Pools**: 3
+- **Pools**: 5
