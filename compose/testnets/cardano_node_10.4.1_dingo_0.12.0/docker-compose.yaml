@@ -4,7 +4,7 @@ x-base: &base
   image: ${registry}${testnet}:latest
   restart: on-failure
   build:
-    context: "../../"
+    context: "https://github.com/cardano-foundation/antithesis#master:compose"
     dockerfile: "Dockerfile.compiled"
     args:
       CARDANO_NODE_VERSION: "10.4.1"
@@ -13,7 +13,7 @@ x-tracer-base: &tracerbase
   image: ${registry}${testnet}_tracer:latest
   restart: on-failure
   build:
-    context: "../../tracer/"
+    context: "https://github.com/cardano-foundation/antithesis#master:compose/tracer"
     # ideally we would like to use a precompiled version of the tracer
     # but unfortunately it's not yet packaged in archives
     # https://github.com/IntersectMBO/cardano-node/issues/6228
@@ -45,7 +45,7 @@ services:
     hostname: d1.example
     container_name: d1
     build:
-      context: "../../"
+      context: "https://github.com/cardano-foundation/antithesis#master/compose"
       dockerfile: "Dockerfile.dingo"
       args:
         DINGO_VERSION: '0.12.0'
