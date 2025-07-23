@@ -1,5 +1,6 @@
 ---
 
+version: '3.8'
 x-base: &base
   image: ${registry}${testnet}:latest
   restart: on-failure

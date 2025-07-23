@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.4
 ARG CARDANO_CLI_VERSION="${CARDANO_CLI_VERSION:-10.8.0.0}"
 ARG CARDANO_NODE_VERSION="${CARDANO_NODE_VERSION:-10.4.1}"
 ARG DINGO_VERSION="${DINGO_VERSION:-0.12.0}"
@@ -38,7 +39,7 @@ WORKDIR /usr/local/src/testnet-generation-tool
 RUN uv sync
 
 # Copy testnet.yaml specification
-COPY --chown=root:root .testnet.yaml /usr/local/src/testnet-generation-tool/testnet.yaml
+COPY --chown=root:root testnet.yaml /usr/local/src/testnet-generation-tool/testnet.yaml
 
 # Build testnet configuration files
 RUN uv run python3 genesis-cli.py testnet.yaml -o /tmp/testnet -c generate

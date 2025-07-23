@@ -4,22 +4,26 @@ x-base: &base
   image: ${registry}${testnet}:latest
   restart: on-failure
   build:
-    context: "https://github.com/cardano-foundation/antithesis#master:compose"
+    context: "https://github.com/cardano-foundation/antithesis.git#anviking/images:compose"
     dockerfile: "Dockerfile.compiled"
     args:
       CARDANO_NODE_VERSION: "10.4.1"
+    additional_contexts:
+      local: .          # the Compose repo the YAML sits in
 
 x-tracer-base: &tracerbase
   image: ${registry}${testnet}_tracer:latest
   restart: on-failure
   build:
-    context: "https://github.com/cardano-foundation/antithesis#master:compose/tracer"
+    context: "https://github.com/cardano-foundation/antithesis.git#anviking/images:compose/tracer"
     # ideally we would like to use a precompiled version of the tracer
     # but unfortunately it's not yet packaged in archives
     # https://github.com/IntersectMBO/cardano-node/issues/6228
     dockerfile: "Dockerfile.compiled"
     args:
       CARDANO_NODE_REF: "10.4.1"
+    additional_contexts:
+      local: .          # the Compose repo the YAML sits in
 
 x-env: &env
   POOL_ID: "0" # Placeholder required for override
@@ -45,10 +49,12 @@ services:
     hostname: d1.example
     container_name: d1
     build:
-      context: "https://github.com/cardano-foundation/antithesis#master/compose"
+      context: "https://github.com/cardano-foundation/antithesis.git#anviking/images:compose"
       dockerfile: "Dockerfile.dingo"
       args:
         DINGO_VERSION: '0.12.0'
+      additional_contexts:
+        local: .          # the Compose repo the YAML sits in
     volumes:
       - d1:/data/db
     ports:
