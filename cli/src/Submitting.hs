@@ -159,10 +159,10 @@ data WalletError
 instance Exception WalletError
 
 readWallet
-    :: Mnemonics 'DecryptedS
+    :: (Bool , Mnemonics 'DecryptedS)
     -> Either WalletError Wallet
-readWallet (ClearText mnemonics) = do
-    walletFromMnemonic $ T.words mnemonics
+readWallet (encryptionState, ClearText mnemonics) = do
+    walletFromMnemonic encryptionState $ T.words mnemonics
 
 writeWallet :: FilePath -> [Text] -> Maybe Text -> IO ()
 writeWallet walletFile mnemonicWords passphrase = do
@@ -176,8 +176,8 @@ writeWallet walletFile mnemonicWords passphrase = do
                 $ ClearText
                 $ T.unwords mnemonicWords
 
-walletFromMnemonic :: [Text] -> Either WalletError Wallet
-walletFromMnemonic mnemonicWords = do
+walletFromMnemonic :: Bool -> [Text] -> Either WalletError Wallet
+walletFromMnemonic encryptionState mnemonicWords = do
     mnemonic <-
         either (Left . InvalidMnemonic . show) Right
             $ mkSomeMnemonic @'[9, 12, 15, 18, 24] mnemonicWords
@@ -209,6 +209,7 @@ walletFromMnemonic mnemonicWords = do
                     $ BS.unpack
                     $ Base16.encode
                     $ digest (Proxy @Blake2b_224) pubBytes32
+            , encryptionState
             }
 
 signTx :: XPrv -> UnsignedTx -> Either SignTxError SignedTx

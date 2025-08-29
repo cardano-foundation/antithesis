@@ -96,11 +96,10 @@ walletFileOption =
         , option
         ]
 
-coreMnemonicsParser :: Parser (Mnemonics 'DecryptedS)
+coreMnemonicsParser :: Parser (Bool, Mnemonics 'DecryptedS)
 coreMnemonicsParser =
-    fmap ClearText
-        $ mnemonicsClearTextOption
-        <|> checkEither
+         (False ,) . ClearText <$> mnemonicsClearTextOption
+        <|> (True ,) . ClearText <$> checkEither
             id
             (decryptText <$> walletPassphraseCommon <*> mnemonicsEncryptedOption)
 
@@ -114,5 +113,5 @@ readJSONFile fp = do
 mnemonicsObject :: Parser Object
 mnemonicsObject = checkMapIO readJSONFile walletFileOption
 
-mnemonicsParser :: Parser (Mnemonics 'DecryptedS)
+mnemonicsParser :: Parser (Bool, Mnemonics 'DecryptedS )
 mnemonicsParser = withConfig (Just <$> mnemonicsObject) coreMnemonicsParser

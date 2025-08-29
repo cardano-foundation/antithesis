@@ -46,6 +46,8 @@ data WalletCommand a where
         :: FilePath
         -> Maybe Text
         -> WalletCommand (Either WalletError WalletInfo)
+    Decrypt :: Wallet -> FilePath -> WalletCommand (Either WalletError WalletInfo)
+    Encrypt :: Wallet -> FilePath -> Text -> WalletCommand (Either WalletError WalletInfo)
 
 deriving instance Show (WalletCommand a)
 deriving instance Eq (WalletCommand a)
