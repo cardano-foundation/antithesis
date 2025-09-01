@@ -43,6 +43,7 @@ import User.Agent.Cli
     , IsReady (NotReady)
     , TestRunId (..)
     )
+import User.Agent.PushTest (PushFailure)
 import User.Agent.Types (TestRunMap)
 import User.Types
     ( Phase (..)
@@ -69,7 +70,24 @@ agentCommandParser =
             $ Box <$> blacklistRepositoryOptions
         , command "download-assets" "Download test run assets"
             $ Box <$> downloadAssetsOptions
+        , command "push-test" "Push a test run to Antithesis"
+            $ Box <$> pushTestOptions
         ]
+
+pushTestOptions
+    :: Parser
+        ( AgentCommand
+            NotReady
+            (AValidationResult PushFailure ())
+        )
+pushTestOptions =
+    PushTest
+        <$> tokenIdOption
+        <*> _
+        <*> _
+        <*> walletOption
+        <*> downloadAssetsDirectoryOption
+        <*> testRunIdOption "push assets from"
 
 downloadAssetsOptions
     :: Parser

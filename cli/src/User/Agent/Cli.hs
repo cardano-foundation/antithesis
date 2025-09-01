@@ -12,6 +12,7 @@ module User.Agent.Cli
 where
 
 import Control.Monad (void)
+import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Class (lift)
 import Core.Context
     ( WithContext
@@ -72,6 +73,12 @@ import Text.JSON.Canonical
     , JSValue (..)
     , ToJSON (..)
     )
+import User.Agent.PushTest
+    ( AntithesisAuth
+    , PushFailure
+    , Registry
+    , pushTestToAntithesisIO
+    )
 import User.Agent.Types
     ( TestRunId (..)
     , TestRunMap (..)
@@ -126,7 +133,7 @@ updateTestRunState tokenId key =
     runValidate . withPreviousTestRunState tokenId key
 
 agentCmd
-    :: Monad m
+    :: MonadIO m
     => AgentCommand NotReady a
     -> WithContext m a
 agentCmd = \case
@@ -145,6 +152,14 @@ agentCmd = \case
     Report tokenId wallet key () duration url ->
         updateTestRunState tokenId key $ \fact ->
             reportCommand tokenId wallet fact duration url
+    PushTest tokenId registry auth wallet dir key ->
+        pushTestToAntithesisIO
+            tokenId
+            registry
+            auth
+            wallet
+            dir
+            key
 
 data IsReady = NotReady | Ready
     deriving (Show, Eq)
@@ -221,6 +236,14 @@ data AgentCommand (phase :: IsReady) result where
         -> AgentCommand
             phase
             (AValidationResult DownloadAssetsFailure ())
+    PushTest
+        :: TokenId
+        -> Registry
+        -> AntithesisAuth
+        -> Wallet
+        -> Directory
+        -> TestRunId
+        -> AgentCommand phase (AValidationResult PushFailure ())
 
 deriving instance Show (AgentCommand NotReady result)
 deriving instance Eq (AgentCommand NotReady result)

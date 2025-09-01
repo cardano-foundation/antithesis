@@ -13,7 +13,7 @@ module Core.Context
     , askConfig
     ) where
 
-import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (MonadTrans, lift)
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Core.Types.Basic (Owner, TokenId)

@@ -103,6 +103,7 @@ library
     Core.Types.Operation
     Core.Types.Tx
     Core.Types.Wallet
+    Docker
     Facts
     Lib.Box
     Lib.GitHub
@@ -135,7 +136,9 @@ library
     Oracle.Validate.Types
     Submitting
     User.Agent.Cli
+    User.Agent.Lib
     User.Agent.Options
+    User.Agent.PushTest
     User.Agent.Types
     User.Requester.Cli
     User.Requester.Options
@@ -184,6 +187,7 @@ library
     , monad-control
     , opt-env-conf
     , plutus-tx
+    , process
     , random
     , scientific
     , servant
@@ -328,6 +332,7 @@ test-suite anti-unit-test
     Oracle.Validate.Requests.TestRun.FinishSpec
     Oracle.Validate.Requests.TestRun.Lib
     Oracle.Validate.Requests.TestRun.RejectSpec
+    User.Agent.PushTestSpec
     User.Agent.TypesSpec
     User.Requester.CliSpec
     User.TypesSpec
