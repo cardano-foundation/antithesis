@@ -31,6 +31,7 @@ import OptEnvConf
     , setting
     , short
     , str
+    , env, strOption
     )
 import Oracle.Validate.DownloadAssets (DownloadAssetsFailure)
 import Oracle.Validate.Requests.ManageWhiteList
@@ -43,7 +44,7 @@ import User.Agent.Cli
     , IsReady (NotReady)
     , TestRunId (..)
     )
-import User.Agent.PushTest (PushFailure)
+import User.Agent.PushTest (PushFailure, AntithesisAuth (..), Registry (..))
 import User.Agent.Types (TestRunMap)
 import User.Types
     ( Phase (..)
@@ -83,11 +84,30 @@ pushTestOptions
 pushTestOptions =
     PushTest
         <$> tokenIdOption
-        <*> _
-        <*> _
+        <*> registryOption
+        <*> antithesisAuthOption
         <*> walletOption
         <*> downloadAssetsDirectoryOption
         <*> testRunIdOption "push assets from"
+
+registryOption :: Parser Registry
+registryOption = Registry <$> strOption
+    [ help "Url for the registry"
+    , metavar "REGISTRY_URL"
+    , long "registry"
+    ]
+
+antithesisAuthOption :: Parser AntithesisAuth
+antithesisAuthOption = cardanoWithPwd <$>
+    setting
+        [ env "ANTITHESIS_PASSWORD"
+        , help "Password for the antithesis api"
+        , metavar "STRING"
+        , reader str
+        ]
+  where
+    cardanoWithPwd pwd =
+        AntithesisAuth{username = "cardano", password = pwd}
 
 downloadAssetsOptions
     :: Parser
