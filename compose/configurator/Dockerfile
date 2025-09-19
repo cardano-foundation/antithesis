@@ -1,8 +1,6 @@
 # Blink Labs images are built from source on Debian Bookworm
 FROM ghcr.io/blinklabs-io/cardano-node:latest AS cardano-node
 
-FROM ubuntu@sha256:7c06e91f61fa88c08cc74f7e1b7c69ae24910d745357e0dfe1d2c0322aaf20f9
-
 USER root
 # Install packages required in build stage
 
@@ -29,13 +27,7 @@ RUN git clone --branch main https://github.com/cardano-foundation/testnet-genera
 # Download testnet-generation-tool dependencies
 WORKDIR /usr/local/src/testnet-generation-tool
 # dockerfile
-RUN uv sync
-# Copy binary from image
-COPY --from=cardano-node --chown=root:root /usr/local/bin/ ./cardano-node/bin/
-# Copy libsecp256k1 (also debian:bookwork-slim AKA stable-slim)
-COPY --from=cardano-node --chown=root:root /usr/local/lib/ /usr/lib/
-COPY --from=cardano-node --chown=root:root /usr/lib/ /tmp/cardano-node/local-lib/
-RUN cp -a --update=none /tmp/cardano-node/local-lib/. /usr/lib/
+RUN uv sync && mkdir -p cardano-node && ln -sf /usr/local/bin ./cardano-node/bin
 
 COPY configurator.sh /
 RUN chmod 0755 /configurator.sh
