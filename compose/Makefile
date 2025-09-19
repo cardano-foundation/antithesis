@@ -10,9 +10,6 @@ testnet:=cardano_node_master
 url:=https://cardano.antithesis.com/api/v1/launch/cardano
 username:=cardano
 
-# Required for builds on OSX ARM
-export DOCKER_DEFAULT_PLATFORM?=linux/amd64
-
 export registry
 
 help:
