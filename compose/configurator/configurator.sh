@@ -128,6 +128,9 @@ set_start_time() {
 
     # .startTime
     jq ".startTime = ${SYSTEM_START_UNIX}" "${BYRON_GENESIS_JSON}" | write_file "${BYRON_GENESIS_JSON}"
+
+    # .ftsSeed (Dingo as of 0.17 needs this as a string, empty so removing it)
+    jq "del(.ftsSeed)" "${BYRON_GENESIS_JSON}" | write_file "${BYRON_GENESIS_JSON}"
 }
 
 

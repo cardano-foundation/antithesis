@@ -1,6 +1,6 @@
 ARG CARDANO_CLI_VERSION="${CARDANO_CLI_VERSION:-10.8.0.0}"
 ARG CARDANO_NODE_VERSION="${CARDANO_NODE_VERSION:-10.4.1}"
-ARG DINGO_VERSION="${DINGO_VERSION:-0.13.0}"
+ARG DINGO_VERSION="${DINGO_VERSION:-latest}"
 ARG UV_VERSION="${UV_VERSION:-0.6.11}"
 # Blink Labs images are built from source on Debian Bookworm
 FROM ghcr.io/blinklabs-io/cardano-cli:${CARDANO_CLI_VERSION} AS cardano-cli

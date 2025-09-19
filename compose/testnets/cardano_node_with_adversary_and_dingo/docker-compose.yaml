@@ -1,0 +1,156 @@
+x-cardano-node: &cardano-node
+  image: ghcr.io/blinklabs-io/cardano-node:latest
+  environment:
+    CARDANO_BLOCK_PRODUCER: true
+    RESTORE_SNAPSHOT: false
+  command: >
+    run --topology /configs/configs/topology.json
+      --config /configs/configs/config.json
+      --database-path /state
+      --socket-path /state/node.socket
+      --tracer-socket-path-connect /tracer/tracer.socket
+      --shelley-operational-certificate /configs/keys/opcert.cert
+      --shelley-kes-key /configs/keys/kes.skey
+      --shelley-vrf-key /configs/keys/vrf.skey
+      --port 3001
+      --host-addr 0.0.0.0
+      +RTS -N -A16m -qg -qb -RTS
+  restart:
+    always
+  depends_on:
+      configurator:
+        condition: service_completed_successfully
+
+services:
+  configurator:
+    image: ghcr.io/cardano-foundation/antithesis/configurator:latest
+    container_name: configurator
+    volumes:
+      - ./testnet.yaml:/testnet.yaml #  source of configurations
+      - p1-configs:/configs/1 # configs for p1
+      - p2-configs:/configs/2 # configs for p2
+      - p3-configs:/configs/3 # configs for p3
+      - p4-configs:/configs/4 # configs for p4
+      - p5-configs:/configs/5 # configs for p5
+
+  tracer:
+    image: ghcr.io/cardano-foundation/antithesis/tracer:latest
+    hostname: tracer.example
+    container_name: tracer
+    volumes:
+      - tracer:/opt/cardano-tracer
+    command:
+       - "--config"
+       - "tracer-config.yaml"
+
+  d1:
+    image: ghcr.io/blinklabs-io/dingo:latest
+    restart: on-failure
+    hostname: d1.example
+    container_name: d1
+    volumes:
+      - p1-configs:/configs # reuse p1 config
+      - tracer:/tracer
+      - ./dingo-topology.json:/opt/cardano/config/devnet/topology.json
+    environment:
+      CARDANO_CONFIG: /configs/configs/config.json
+      CARDANO_DATABASE_PATH: /state
+      CARDANO_NETWORK: devnet
+      CARDANO_NODE_SOCKET_PATH: /state/dingo.socket
+      CARDANO_SOCKET_PATH: /state/dingo.socket
+      CARDANO_TOPOLOGY: /opt/cardano/config/devnet/topology.json
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+
+  p1:
+    <<: *cardano-node
+    container_name: p1
+    hostname: p1.example
+    ports:
+      - 3001:3001
+    volumes:
+      - p1-configs:/configs
+      - tracer:/tracer
+
+  p2:
+    <<: *cardano-node
+    container_name: p2
+    hostname: p2.example
+    volumes:
+      - p2-configs:/configs
+      - tracer:/tracer
+
+  p3:
+    <<: *cardano-node
+    container_name: p3
+    hostname: p3.example
+    volumes:
+      - p3-configs:/configs
+      - tracer:/tracer
+
+  p4:
+    <<: *cardano-node
+    container_name: p4
+    hostname: p4.example
+    volumes:
+      - p4-configs:/configs
+      - tracer:/tracer
+
+  p5:
+    <<: *cardano-node
+    container_name: p5
+    hostname: p5.example
+    volumes:
+      - p5-configs:/configs
+      - tracer:/tracer
+
+  sidecar:
+    image: ghcr.io/cardano-foundation/antithesis/sidecar:latest
+    container_name: sidecar
+    hostname: sidecar.example
+    environment:
+      POOLS: "5" # FIXME: could remove
+      EXTRA_NODES: "d1"
+
+  tracer-sidecar:
+    image: ghcr.io/cardano-foundation/antithesis/tracer-sidecar:latest
+    container_name: tracer-sidecar
+    hostname: tracer-sidecar.example
+    environment:
+      POOLS: "5"
+      CHAINPOINT_FILEPATH: "/opt/cardano-tracer/chainPoints.log"
+    volumes:
+      - tracer:/opt/cardano-tracer
+
+  adversary:
+    image: ghcr.io/cardano-foundation/antithesis/adversary:latest
+    build:
+      context: "../../../adversary/"
+      dockerfile: "Dockerfile"
+      args:
+        CARDANO_NODE_REF: "10.5.1"
+    environment:
+      NETWORKMAGIC: 42
+      PORT: 3001
+      LIMIT: 100
+      POOLS: "5"
+      CHAINPOINT_FILEPATH: "/opt/cardano-tracer/chainPoints.log"
+    hostname: adversary
+    container_name: adversary
+    volumes:
+      - tracer:/opt/cardano-tracer
+
+volumes:
+  tracer:
+  p1-configs:
+  p2-configs:
+  p3-configs:
+  p4-configs:
+  p5-configs:
+
+networks:
+  default:
+    name: cardano-node-testnet
+    driver: bridge
+    internal: ${INTERNAL_NETWORK}
