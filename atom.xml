@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="utf-8"?><?xml-stylesheet type="text/xsl" href="atom.xsl"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://cardano-foundation.github.io/antithesis/</id>
+    <title>CF/Antithesis Blog</title>
+    <updated>2025-09-08T00:00:00.000Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://cardano-foundation.github.io/antithesis/"/>
+    <subtitle>CF/Antithesis Blog</subtitle>
+    <icon>https://cardano-foundation.github.io/antithesis/img/cardano-ada-logo.svg</icon>
+    <entry>
+        <title type="html"><![CDATA[Antithesis tools for Cardano Community]]></title>
+        <id>https://cardano-foundation.github.io/antithesis/anti-cli-news</id>
+        <link href="https://cardano-foundation.github.io/antithesis/anti-cli-news"/>
+        <updated>2025-09-08T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[The next Node diversity workshop, where Cardano developers focusing on building various kind of nodes will meet in Toulouse, is just around the corner. It therefore seemed a good idea to share an update on the Antithesis project initiated by the Cardano Foundation, especially as representatives from Antithesis and the teams working on this project will attend the workshop!]]></summary>
+        <content type="html"><![CDATA[<p>The next <em>Node diversity workshop</em>, where Cardano developers focusing on building various kind of nodes will meet in Toulouse, is just around the corner. It therefore seemed a good idea to share an update on the Antithesis project initiated by the Cardano Foundation, especially as representatives from Antithesis and the teams working on this project will attend the workshop!</p>
+<p>And although it's been while since we have shared news in our <a href="https://cardano-foundation.github.io/antithesis/poc-results">latest blog post</a>, the project hasn't stayed still and we made progress on a number of fronts, ready for the next phase namely its transformation from an experiment restricted to a small team to a community-lead resource.</p>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="testing-cardano-node-with-antithesis">Testing cardano-node with Antithesis<a href="https://cardano-foundation.github.io/antithesis/anti-cli-news#testing-cardano-node-with-antithesis" class="hash-link" aria-label="Direct link to Testing cardano-node with Antithesis" title="Direct link to Testing cardano-node with Antithesis">​</a></h2>
+<p>Since May we have been running Antithesis on a cluster of 5 cardano-nodes as part of the <em>Continuous Integration</em> process of the project, leveraging the existing <em>Github Action</em> to trigger test runs. Those test runs have been done on the latest available versions of the Docker image of cardano-node, on the <code>master</code> branch, and checking a limited number of basic properties on top of the ones provided by Antithesis out-of-the-box:</p>
+<ul>
+<li>The main property checked is implemented in the <a href="https://github.com/cardano-foundation/antithesis/blob/e86149c883b00b035ff0f61861df7780e7d67e8a/compose/sidecar/composer/convergence/eventually_converged.sh#L1" target="_blank" rel="noopener noreferrer">eventually-converged.sh</a> script and, as its name implies, checks that all nodes have reached the same tip <em>eventually</em>. The fact this is an <a href="https://antithesis.com/docs/test_templates/test_composer_reference/#eventually-command" target="_blank" rel="noopener noreferrer">eventually</a> command is critically important as it guarantees it will be run and its status checked at the end of the test run and without any more faults injected. It took us a while to refine the property and work with the Antithesis team to ensure it does not produce false positives,</li>
+<li>We also check 2 <em>Never</em> properties related to logs emitted by the cardano-node: That it never emits <code>Error</code> or <code>Critical</code> logs.</li>
+</ul>
+<p>Note that by default Antithesis checks a number of other properties, like the fact no container exits unexpectedly, or that the processes run never go over 95% of the memory available.</p>
+<p>The team's effort has not been particularly focused on finding bugs, but we still managed to report a couple of potentially "interesting" issues to the core developers: One issue related to DNS resolution failure timeout, and a potential race condition in the shutdown/startup sequence.</p>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="tracking-test-runs-on-chain">Tracking test runs on-chain<a href="https://cardano-foundation.github.io/antithesis/anti-cli-news#tracking-test-runs-on-chain" class="hash-link" aria-label="Direct link to Tracking test runs on-chain" title="Direct link to Tracking test runs on-chain">​</a></h2>
+<p>The main goal of this project has always been to open access to the Antithesis resource to the Cardano community, in a transparent, fair, and as easy as possible way. And what's better than a blockchain like Cardano to manage access to a shared resource transparently? Furthermore, as developers of <em>Cardano</em> systems it seems quite logical and inline with the principle of <a href="https://en.wikipedia.org/wiki/Eating_your_own_dog_food" target="_blank" rel="noopener noreferrer"><em>dogfooding</em></a> to insist on using Cardano itself in our development workflow.</p>
+<p>Once convinced about the capabilities of the tool, we started designing and building a Cardano-based system that would allow developers to "easily" request test runs for their particular software stack, and receive results and reports once produced by the platform. Version 0.2.0.0 of the command-line tool called <em>anti-cli</em> has <a href="https://github.com/cardano-foundation/antithesis/releases/tag/v0.2.0.0" target="_blank" rel="noopener noreferrer">just been released</a> and it provides the core features needed to manage the lifecycle of Antithesis tests for any system hosted on Github<sup><a href="https://cardano-foundation.github.io/antithesis/anti-cli-news#user-content-fn-1-222154" id="user-content-fnref-1-222154" data-footnote-ref="true" aria-describedby="footnote-label">1</a></sup>.</p>
+<p><em>Anti-cli</em> leverages <a href="https://app.radicle.xyz/nodes/seed.hydra.bzh/rad%3AzpZ4szHxvnyVyDiy2acfcVEzxza9" target="_blank" rel="noopener noreferrer">Merkle-Patricia Forestry Service</a> as a backend-service to store data off-chain with proofs verifiable on-chain. This service is in turn based on the excellent Aiken <a href="https://github.com/aiken-lang/merkle-patricia-forestry" target="_blank" rel="noopener noreferrer">Merkle-Patricia Forestry</a> library.</p>
+<p>The following picture illustrates the overall design of this application and how it interacts with the chain and the Antithesis service:</p>
+<p><img decoding="async" loading="lazy" alt="anti-cli interactions" src="https://cardano-foundation.github.io/antithesis/assets/images/anti-cli-interactions-b4b604706b36bfca3e0ea03f1a7ac86b.jpg" width="6476" height="2989" class="img_ev3q"></p>
+<p>The developer, here <strong>Alice</strong> uses <em>anti-cli</em> to post test run requests and retrieve test run results from the MPFS service. MPFS service is used to compute unsigned transactions necessary for the parties to operate index the blockchain to track and serve the state of the interaction. It can be run locally, giving it access to a node, or parties can use a remote instance (see <a href="https://app.radicle.xyz/nodes/seed.hydra.bzh/rad%3AzpZ4szHxvnyVyDiy2acfcVEzxza9" target="_blank" rel="noopener noreferrer">mpfs repository</a>).</p>
+<p>On the other side, the <strong>Agent</strong> is reponsible for <em>mediating</em> and curating run requests, forward those requests to the Antithesis service, retrieve the tests result, and finally notify the results on-chain for <strong>Alice</strong>'s consumption. Note that because of the sensitive nature of test results, the report's URL posted on-chain is encrypted using <strong>Alice</strong>'s public key which in turns require them to record this key as part of their registration process.</p>
+<p>More details can be found in the <a href="https://app.radicle.xyz/nodes/seed.hydra.bzh/rad:z2a7Te5b28CX5YyPQ7ihrdG2EEUsC/tree/cli/README.md" target="_blank" rel="noopener noreferrer">anti-cli documentation</a> and particularly in the <a href="https://app.radicle.xyz/nodes/seed.hydra.bzh/rad:z2a7Te5b28CX5YyPQ7ihrdG2EEUsC/tree/cli/docs/requester-role.md" target="_blank" rel="noopener noreferrer">requester role</a> document.</p>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="testing-amaru-in-antithesis">Testing Amaru in Antithesis<a href="https://cardano-foundation.github.io/antithesis/anti-cli-news#testing-amaru-in-antithesis" class="hash-link" aria-label="Direct link to Testing Amaru in Antithesis" title="Direct link to Testing Amaru in Antithesis">​</a></h2>
+<p><a href="https://github.com/pragma-org/amaru" target="_blank" rel="noopener noreferrer">Amaru</a> is an alternative node implemented in Rust which is being actively developed by a small but dedicated team under the umbrella of <a href="https://pragma.io/" target="_blank" rel="noopener noreferrer">PRAGMA</a>, a <em>Member-Based Organisation</em> dedicated exclusively to foster open-source projects. As such it's a prime candidate to prove Antithesis' relevance for the development of core systems in Cardano beside the cardano-node itself.</p>
+<p>It took the team some time to get there, as there were quite a few moving parts to get right in order to be able to run a cluster of cardano-nodes and amaru nodes<sup><a href="https://cardano-foundation.github.io/antithesis/anti-cli-news#user-content-fn-2-222154" id="user-content-fnref-2-222154" data-footnote-ref="true" aria-describedby="footnote-label">2</a></sup>, but we finally managed to run our first Antithesis in the past couple of weeks.</p>
+<p>The setup is pretty simple: We spin up a network of 5 block producing cardano-nodes and 2 Amaru nodes in client mode, with one of the Amarus connected to a cardano-node and the other one to the previous Amaru node. While the test run itself wasn't successful, which is expected given the current state of development of Amaru, this is nevertheless a huge step forward for us.</p>
+<p>Details of the setup can be found in the <a href="https://github.com/pragma-org/amaru/tree/main/docker/testnet" target="_blank" rel="noopener noreferrer">Amaru codebase</a>. This initial success paves the way for quickly pinpointing main shortcomings in Amaru and target development effort accordingly first to make sure Amaru can be a reliable relay and then turn into a full-fledged block producer.</p>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="adversarial-node--network">Adversarial node &amp; network<a href="https://cardano-foundation.github.io/antithesis/anti-cli-news#adversarial-node--network" class="hash-link" aria-label="Direct link to Adversarial node &amp; network" title="Direct link to Adversarial node &amp; network">​</a></h2>
+<p>A key feature of Antithesis is its ability to inject faults in the <em>System-under-test</em>. <a href="https://antithesis.com/docs/environment/fault_injection/" target="_blank" rel="noopener noreferrer">Currently</a>, Antithesis can trigger various kind of network-related faults like dropped or delayed packets, disconnections, split-brains ; cpu and memory throttling to simulate sudden limitation of resources ; or random crashes. But as clearly stated in the documentation page, those faults are very generic and simulate faults from the environment but not really <em>adversarial</em> behaviour, and as we are the ones knowing our system best it rests on us to produce more interesting <em>faults</em>.</p>
+<p>Following initial discussions with the Consensus team we have started work on an <a href="https://app.radicle.xyz/nodes/seed.hydra.bzh/rad:z2a7Te5b28CX5YyPQ7ihrdG2EEUsC/tree/adversary/README.md" target="_blank" rel="noopener noreferrer">Adversarial Node</a>. This is intended to be an extensible and configurable application that can be triggered by Antithesis platform during tests to emulate adversarial behaviour at the protocol and logic level. Our very first "adversary" is quite mild in its "attacks" on nodes
+as it merely tries to open several connections to a node and start synchronising the chain from random points in the past. Its goal is to expose potential issues in the way a node tracks <em>Chain followers</em>, eg. memory leaks, concurrency issues, network resources allocation...</p>
+<p>A key design constraint of the <em>Adversary</em> is that it should only act through Cardano protocols, without any prior knowledge of the implementation of the nodes it connects to. This makes it possible to use the <em>Adversary</em> in any valid Cardano-network and running against any piece of software implementing Cardano protocols, whether at the network, consensus, or even ledger level<sup><a href="https://cardano-foundation.github.io/antithesis/anti-cli-news#user-content-fn-3-222154" id="user-content-fnref-3-222154" data-footnote-ref="true" aria-describedby="footnote-label">3</a></sup>.</p>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="conclusion--future-work">Conclusion &amp; Future work<a href="https://cardano-foundation.github.io/antithesis/anti-cli-news#conclusion--future-work" class="hash-link" aria-label="Direct link to Conclusion &amp; Future work" title="Direct link to Conclusion &amp; Future work">​</a></h2>
+<p>While the <em>High-Assurance Lab</em> team at Cardano foundation has made great progress to turn what started as an experiment and proof-of-concept a few months ago into a full-fledged usable project, there obviously remains a lot to be done. Our end goal is to build tools and systems that benefit the Cardano ecosystem a as whole by providing easy-to-use, transparent, and safe access to a sophisticated testing tools empowering teams with state-of-the-art system-level testing infrastructure.</p>
+<p>But we also want these tools and systems to be <em>owned</em> by the community in order to ensure adequate funding and proper governance of something we believe can increase the level of quality, resilience, and therefore confidence in Cardano. That's why we are eager to engage with "node builders" around the globe, and to collaborate with all teams and projects building core infrastructure components and applications to make the most out of this effort.</p>
+<!-- -->
+<section data-footnotes="true" class="footnotes"><h2 class="anchor anchorWithStickyNavbar_LWe7 sr-only" id="footnote-label">Footnotes<a href="https://cardano-foundation.github.io/antithesis/anti-cli-news#footnote-label" class="hash-link" aria-label="Direct link to Footnotes" title="Direct link to Footnotes">​</a></h2>
+<ol>
+<li id="user-content-fn-1-222154">
+<p>We have tested the tool not only internally within the team, but using Amaru as our guinea pig project. <a href="https://cardano-foundation.github.io/antithesis/anti-cli-news#user-content-fnref-1-222154" data-footnote-backref="" aria-label="Back to reference 1" class="data-footnote-backref">↩</a></p>
+</li>
+<li id="user-content-fn-2-222154">
+<p>For more details on this journey, one can consult the <a href="https://github.com/pragma-org/amaru/wiki/log-::-2025%E2%80%9009" target="_blank" rel="noopener noreferrer">team's journal</a>. <a href="https://cardano-foundation.github.io/antithesis/anti-cli-news#user-content-fnref-2-222154" data-footnote-backref="" aria-label="Back to reference 2" class="data-footnote-backref">↩</a></p>
+</li>
+<li id="user-content-fn-3-222154">
+<p>We have good hopes this adversary will be useful in other contexts, in particular within the context of <a href="https://github.com/cardano-scaling/tartarus" target="_blank" rel="noopener noreferrer">Tartarus</a>. <a href="https://cardano-foundation.github.io/antithesis/anti-cli-news#user-content-fnref-3-222154" data-footnote-backref="" aria-label="Back to reference 3" class="data-footnote-backref">↩</a></p>
+</li>
+</ol>
+</section>]]></content>
+        <author>
+            <name>Arnaud Bailly</name>
+            <uri>https://github.com/abailly</uri>
+        </author>
+        <category label="Infrastructure" term="Infrastructure"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Antithesis Proof-of-Concept Results]]></title>
+        <id>https://cardano-foundation.github.io/antithesis/poc-results</id>
+        <link href="https://cardano-foundation.github.io/antithesis/poc-results"/>
+        <updated>2025-05-01T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Since the start of our project, Cardano Foundation and Antithesis have been busy working on a Proof-of-Concept aimed at evaluating Antithesis's capability to enhance Cardano's testing infrastructure. The results have been promising, with the platform successfully identifying both previously known and new unknown bugs in the cardano-node.]]></summary>
+        <content type="html"><![CDATA[<p>Since the <a href="https://cardano-foundation.github.io/antithesis/kick-off-antithesis">start</a> of our project, Cardano Foundation and Antithesis have been busy working on a Proof-of-Concept aimed at evaluating Antithesis's capability to enhance Cardano's testing infrastructure. The results have been promising, with the platform successfully identifying both previously known and new unknown bugs in the cardano-node.</p>
+<p>This blog post outlines our journey and findings so far, and sketches out plans for the short and medium term in order to ensure this project delivers the most value for the Cardano community.</p>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="overview">Overview<a href="https://cardano-foundation.github.io/antithesis/poc-results#overview" class="hash-link" aria-label="Direct link to Overview" title="Direct link to Overview">​</a></h2>
+<p>Our exploration with Antithesis began in January 2025, when we first made contact with their team. Quite excited with the prospect this tool offered for testing existing and feature core components of the Cardano network, a small team was assembled within the Cardano Foundation to work on a Proof-of-Concept with Antithesis team. This project was kicked-off on April 2nd at which point both teams started to collaborate actively to understand how to best use the platform to test cardano-node.</p>
+<h3 class="anchor anchorWithStickyNavbar_LWe7" id="goals-and-objectives">Goals and Objectives<a href="https://cardano-foundation.github.io/antithesis/poc-results#goals-and-objectives" class="hash-link" aria-label="Direct link to Goals and Objectives" title="Direct link to Goals and Objectives">​</a></h3>
+<p>The PoC was undertaken with the main goal of determining if Antithesis could significantly improve our ability to test the Cardano network and its components. As a stretch goal, we also wanted to gauge interest from the broader Cardano community in using such a tool.</p>
+<p>To achieve these goals, we established several concrete objectives:</p>
+<ul>
+<li>Learn how to run Antithesis (AT) on a cluster of <a href="https://github.com/IntersectMBO/cardano-node" target="_blank" rel="noopener noreferrer">cardano-node</a></li>
+<li>Reproduce already known bugs, aka. <a href="https://www.smithsonianmag.com/arts-culture/why-did-van-halen-demand-concert-venues-remove-brown-mms-from-the-menu-180982570/" target="_blank" rel="noopener noreferrer">Brown M&amp;Ms</a></li>
+<li>Discover new, unknown bugs</li>
+<li>Engage with the Core team to gather early feedback and build Cardano specific test environment (properties, <a href="https://antithesis.com/docs/test_templates/" target="_blank" rel="noopener noreferrer">test composer</a>...)</li>
+<li>Outline how Antithesis can benefit the community in the future</li>
+</ul>
+<h3 class="anchor anchorWithStickyNavbar_LWe7" id="the-teams">The Teams<a href="https://cardano-foundation.github.io/antithesis/poc-results#the-teams" class="hash-link" aria-label="Direct link to The Teams" title="Direct link to The Teams">​</a></h3>
+<p>This initiative brought together expertise from both organizations:</p>
+<ul>
+<li>On the Cardano side, people from the HAL, Network and Infrastructure team at the Cardano Foundation, as well as involvement of engineers from IOE's Consensus team</li>
+<li>On the Antithesis side, solution engineers to support the team.</li>
+</ul>
+<h3 class="anchor anchorWithStickyNavbar_LWe7" id="results-and-achievements">Results and Achievements<a href="https://cardano-foundation.github.io/antithesis/poc-results#results-and-achievements" class="hash-link" aria-label="Direct link to Results and Achievements" title="Direct link to Results and Achievements">​</a></h3>
+<p>When measured against our initial objectives, the PoC delivered significantly positive results. Some objectives were not fully completed but they mostly relate to our stated stretch goal. Most importantly, the main goal of this Proof-of-Concept period, namely to demonstrate Antithesis' capabilities to find issues in Cardano network was achieved.</p>
+<ul>
+<li>✅ <strong>Learn how to run tests with Haskell node</strong>: Successfully achieved</li>
+<li>✅ <strong>Reproduce already known bugs</strong>: Successfully achieved</li>
+<li>✅ <strong>Find new and unknown bugs</strong>: Successfully achieved</li>
+<li>🟠 <strong>Engage with other teams to gather early feedback</strong>: Partially achieved</li>
+<li>🟠 <strong>Learn how to best use AT platform for Cardano</strong>: Partially achieved</li>
+<li>🔴 <strong>Engage with community to ensure interest and funding</strong>: Not achieved</li>
+</ul>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="more-details-about-our-findings">More details about our findings<a href="https://cardano-foundation.github.io/antithesis/poc-results#more-details-about-our-findings" class="hash-link" aria-label="Direct link to More details about our findings" title="Direct link to More details about our findings">​</a></h2>
+<h3 class="anchor anchorWithStickyNavbar_LWe7" id="infrastructure">Infrastructure<a href="https://cardano-foundation.github.io/antithesis/poc-results#infrastructure" class="hash-link" aria-label="Direct link to Infrastructure" title="Direct link to Infrastructure">​</a></h3>
+<p>Using Antithesis to test cardano-node required some initial effort to create the necessary basic infrastructure of Docker images and compose descriptors. As our first objective was to be able to reproduce some peer-to-peer network related bugs, we leveraged and open-sourced our in-house tool for <a href="https://github.com/cardano-foundation/testnet-generation-tool" target="_blank" rel="noopener noreferrer">generating testnets</a> configuration.</p>
+<p>This enabled us to test relatively large clusters of up to 12 nodes while simulating extended time periods of several hours, enough to trigger various changes in the P2P controller. Throughout this process, we had to overcome various minor challenges integrating cardano-node in Antithesis, and it took us a couple of weeks to be able to run a meaningful test to completion.</p>
+<p>As examplified by the <a href="https://github.com/cardano-foundation/antithesis/blob/07474674fc8a8bfbb8a56316939c5eee3e594a6e/compose/testnets/example_10.2.1/README.md#L1" target="_blank" rel="noopener noreferrer">example_10.2.1</a> directory, the configuration needed to run a cluster of Cardano nodes in AT will be defined as a <a href="https://docs.docker.com/compose/" target="_blank" rel="noopener noreferrer">docker compose</a> file containing:</p>
+<ul>
+<li>A set of <em>n</em> networked nodes pulled either from a public or dedicated repository. Each of those containers is typically built from either pre-built cardano-node binaries or a specific source tree, and runs a node along with a process that injects transaction at a regular interval,</li>
+<li>A <em>sidecar</em> container whose purpose is to monitor the rest of the cluster and notify the AT runner of the main events of interest, most importantly when the cluster is ready to be tested.</li>
+</ul>
+<p>An AT run then "simply" consists in feeding the <code>docker-compose.yaml</code> file to the API and waiting for the result to be notified.</p>
+<h3 class="anchor anchorWithStickyNavbar_LWe7" id="bug-discovery">Bug Discovery<a href="https://cardano-foundation.github.io/antithesis/poc-results#bug-discovery" class="hash-link" aria-label="Direct link to Bug Discovery" title="Direct link to Bug Discovery">​</a></h3>
+<p>Obviously, the purpose of AT is to find bugs and this was our main objective of the proof-of-concept project. Our experiments with AT were able to:</p>
+<ul>
+<li>Find three known bugs we reintroduced or left in the nodes voluntarily,</li>
+<li>Find three unknown bugs, which is the most interesting outcome we could have expected.</li>
+</ul>
+<p>The three known bugs were:</p>
+<ul>
+<li>Race in the Inbound governor startup logic, an <a href="https://github.com/IntersectMBO/ouroboros-network/pull/5017/commits/f11758176591c9868beb06a42e7f22c9ac36d9b0" target="_blank" rel="noopener noreferrer">old bug</a> that was discovered with <a href="https://github.com/input-output-hk/io-sim/blob/main/io-sim/how-to-use-IOSimPOR.md" target="_blank" rel="noopener noreferrer">IOSimPOR</a> and fixed in later versions of cardano-node,</li>
+<li>Peer-sharing <a href="https://github.com/IntersectMBO/ouroboros-network/issues/5058" target="_blank" rel="noopener noreferrer">known bug</a> which is trivial to trigger,</li>
+<li>Blockfetch protocol bug which was reinserted during work on new features.</li>
+</ul>
+<p>Of the three previously unknown bugs, two are related to networking and one to consensus. The latter was notified to the consensus core team which quickly confirmed the issue and was able to reproduce it locally, leading to patch included in the 10.4.1 version of the node.</p>
+<p>Some assumptions made by AT can lead it to report bugs which aren't ones, like the fact the cardano-node outputs some metrics at a severity level classified as <code>Critical</code> which AT wrongly interprets as bugs.</p>
+<h3 class="anchor anchorWithStickyNavbar_LWe7" id="troubleshooting-bug-findings">Troubleshooting bug findings<a href="https://cardano-foundation.github.io/antithesis/poc-results#troubleshooting-bug-findings" class="hash-link" aria-label="Direct link to Troubleshooting bug findings" title="Direct link to Troubleshooting bug findings">​</a></h3>
+<p>It's great to find bugs but once one is found, it's even better to be able to investigate promptly its origin. AT provides a few tools to do so, but we haven't had the time yet to leverage those to their fullest extant.</p>
+<p>Being a deterministic simulation testing platform, AT can explore various "multiverses", travelling to the past and trying different configurations and fault injections, to better understand how easily a bug is triggered and what kind of circumstances lead to it. The following picture is an example <em>Bug likelihood graph</em> that is generated from the history of executions</p>
+<p><img decoding="async" loading="lazy" alt="Bug likelihood graph" src="https://cardano-foundation.github.io/antithesis/assets/images/bug-likelihood-graph-ef5da0b8c0b0a91ff8ebc06b386cc16f.png" width="2796" height="800" class="img_ev3q"></p>
+<p>But the most powerful tool at our disposal is the so-called <a href="https://antithesis.com/docs/multiverse_debugging/overview/" target="_blank" rel="noopener noreferrer"><em>Multiverse Debugger</em></a> which provides an environment, similar to Notebook, where one can interact with the System-Under-Test using any tool available in the Docker images and more importantly where it's possible to travel back in time and <em>branch</em> execution of the SUT in order to investigate various hypothesis on the origin of a bug.</p>
+<p>We tried to investigate one bug through the Multiverse Debugger by using <a href="https://www.tcpdump.org/" target="_blank" rel="noopener noreferrer">tcpdump</a> to generate pcap files and troubleshoot networking issues, but we were not able to reproduce the bug once observed with tcpdump. However, having the containers fully under our control allowed us to be able to download the node's database which was quite helpful to reproduce issues locally.</p>
+<h3 class="anchor anchorWithStickyNavbar_LWe7" id="community-engagement">Community Engagement<a href="https://cardano-foundation.github.io/antithesis/poc-results#community-engagement" class="hash-link" aria-label="Direct link to Community Engagement" title="Direct link to Community Engagement">​</a></h3>
+<p>Community outreach during the PoC period remained an area with significant room for development. We introduced and discussed the platform at the Node Diversity workshop, which sparked some interest among attendees, but as we hadn't had concrete results at the time, this interest did not lead to concrete collaboration.
+However, the fact we were able to find a genuinely new bug, and the collaboration this lead to with the consensus team, are significantly positive signals that Antithesis can become a valuable asset in the development process of both existing and future "nodes".</p>
+<p>We haven't yet had the opportunity to test Amaru on the Antithesis platform due to lack of time and Amaru state of development which, so far, would not make it possible to run meaningful end-to-end tests in a cluster.</p>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="conclusion">Conclusion<a href="https://cardano-foundation.github.io/antithesis/poc-results#conclusion" class="hash-link" aria-label="Direct link to Conclusion" title="Direct link to Conclusion">​</a></h2>
+<p>This proof-of-concept project achieved its goals in demonstrating the ability of Antithesis to find interesting bugs, supplementing the existing extensive testing infrastructure the cardano-node possesses. There's still a lot of work lying ahead of us and the Cardano Foundation is committed to keep working with Antithesis to reach that ambitious goal, namely open access to these sophisticated testing capabilities for other node implementations, and more generally the whole Cardano community.</p>
+<h3 class="anchor anchorWithStickyNavbar_LWe7" id="next-steps">Next steps<a href="https://cardano-foundation.github.io/antithesis/poc-results#next-steps" class="hash-link" aria-label="Direct link to Next steps" title="Direct link to Next steps">​</a></h3>
+<p>To this end, we plan to work along the following axes:</p>
+<ol>
+<li>Make it easier for node implementors to use Antithesis for testing,</li>
+<li>Provide generic properties that can easily be integrated in test composer <em>sidecar</em> that any validator node should respect, such as the one outlined on the <a href="https://ouroboros-consensus.cardano.intersectmbo.org/docs/for-developers/CardanoPraosBasics" target="_blank" rel="noopener noreferrer">Ouroboros Consensus page</a> and drawn from the research papers.</li>
+</ol>
+<p>More concretely, in the short term we'll be focusing on:</p>
+<ol>
+<li>Better documentation on how to run new tests on the platform,</li>
+<li>Automating test executions and report sharing through GitHub actions,</li>
+<li>Enable logs based SDK using <a href="https://github.com/cardano-foundation/antithesis/pull/5" target="_blank" rel="noopener noreferrer">cardano-tracer</a> to aggregate cardano-node logs,</li>
+<li>Express more interesting properties (Chain prefix, chain density, chain growth...) as composable scripts or executables to be included in test composer images,</li>
+<li>Collaborate with cardano-node, Amaru, and other node implementor teams interested in leveraging Antithesis.</li>
+</ol>
+<p>We also want to contribute useful tools and techniques, that can be used both within and without the Antithesis platform, as has been discussed in the <a href="https://forum.cardano.org/t/node-diversity-workshop-april-2025/145248/1" target="_blank" rel="noopener noreferrer">Node Diversity Workshop</a> that took place in Paris a month ago:</p>
+<ol>
+<li>Generalise the <em>block tree</em> generators and other testing tools already existing in ouroboros-consensus to make them usable with arbitrary node implementations,</li>
+<li>Implement an <em>adversarial node</em> that would actively try to thwart honest nodes.</li>
+</ol>
+<h3 class="anchor anchorWithStickyNavbar_LWe7" id="call-to-action">Call To Action<a href="https://cardano-foundation.github.io/antithesis/poc-results#call-to-action" class="hash-link" aria-label="Direct link to Call To Action" title="Direct link to Call To Action">​</a></h3>
+<p>Because we believe the safety and security of the network is the responsibility of the whole community, this project is meant to be as open as possible and we actively seek and encourage contributions which could take a wide variety of forms:</p>
+<ul>
+<li>Improve infrastructure code (eg. docker images, containers, compose files) we use to run tests,</li>
+<li>Better document this infrastructure and how to run those tests,</li>
+<li>Define <a href="https://antithesis.com/docs/test_templates/" target="_blank" rel="noopener noreferrer">tests</a> that explore "interesting" scenarios,</li>
+<li>...</li>
+</ul>]]></content>
+        <author>
+            <name>Arnaud Bailly</name>
+            <uri>https://github.com/abailly</uri>
+        </author>
+        <category label="Infrastructure" term="Infrastructure"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Cardano / Antithesis Project Kick-off]]></title>
+        <id>https://cardano-foundation.github.io/antithesis/kick-off-antithesis</id>
+        <link href="https://cardano-foundation.github.io/antithesis/kick-off-antithesis"/>
+        <updated>2025-04-02T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Already involved in testing and monitoring the Cardano network infrastructure, the Cardano Foundation has decided to dedicate resources to evaluate if and how Antithesis could increase the reach and level of quality assurance the network needs.]]></summary>
+        <content type="html"><![CDATA[<p>Already involved in testing and monitoring the Cardano network infrastructure, the <a href="https://cardanofoundation.org/" target="_blank" rel="noopener noreferrer">Cardano Foundation</a> has decided to dedicate resources to evaluate if and how <a href="https://antithesis.com/" target="_blank" rel="noopener noreferrer">Antithesis</a> could increase the reach and level of quality assurance the network needs.</p>
+<p>This post introduces the project, its motivations, scope, ambitions, and timeline.</p>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="why-this-project">Why this project?<a href="https://cardano-foundation.github.io/antithesis/kick-off-antithesis#why-this-project" class="hash-link" aria-label="Direct link to Why this project?" title="Direct link to Why this project?">​</a></h2>
+<p>The teams implementing the <a href="https://github.com/IntersectMBO/cardano-node" target="_blank" rel="noopener noreferrer">cardano-node</a> have developed over the years an extensive set of tools, including sophisticated <a href="https://hackage.haskell.org/package/io-sim" target="_blank" rel="noopener noreferrer">simulation</a> and <a href="https://hackage.haskell.org/package/quickcheck-dynamic" target="_blank" rel="noopener noreferrer">model-based</a> testing systems</p>
+<p>Testing distributed systems at scale is a hard problem, poses unique challenges in terms of tools, scenarios generation, reproducibility, failure analysis, and it requires deep expertise and a significant investment to be effective.</p>
+<p>As exemplified by the continued successes of <a href="https://jepsen.io/" target="_blank" rel="noopener noreferrer">Jepsen</a> reports over the past decade, rigorous system-level blackbox testing with fault injections and sophisticated traces analysis can uncover subtle concurrency bugs and security vulnerabilities. However, such tests can quickly be expensive to setup even with virtualised infrastructure, take a lot of time to execute, and are hard to reproduce.</p>
+<p>Simulation testing, whereby a piece of software is tested in an environment which <em>simulates</em> its actual execution target to provide better control and allow exploring a lot of scenarios including fault injections, is a quite old technique. The success the <a href="https://www.foundationdb.org/" target="_blank" rel="noopener noreferrer">FoundationDB</a> team had applying this technique sparked the development of <a href="https://antithesis.com/" target="_blank" rel="noopener noreferrer">Antithesis</a>, a generic platform for simulation testing of distributed systems.</p>
+<p>As the ecosystem grows to include new and different "nodes" in the network like <a href="https://github.com/txpipe/dolos" target="_blank" rel="noopener noreferrer">Dolos</a>, <a href="https://github.com/blinklabs-io/dingo" target="_blank" rel="noopener noreferrer">Dingo</a>, <a href="https://github.com/pragma-org/amaru" target="_blank" rel="noopener noreferrer">Amaru</a>, and many tools and systems building on Cardano core infrastructure, the need arises to investigate how to provide similar system-level testing tools in a language-agnostic way, tools that could be used by the whole community to investigate more scenarios in a more diverse environment.</p>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="what-is-antithesis">What is Antithesis?<a href="https://cardano-foundation.github.io/antithesis/kick-off-antithesis#what-is-antithesis" class="hash-link" aria-label="Direct link to What is Antithesis?" title="Direct link to What is Antithesis?">​</a></h2>
+<p>In short, Antithesis is a platform combining:</p>
+<ol>
+<li>A <em>deterministic hypervisor</em> that can run nearly arbitrary pieces of software, emulating the full complexity of the underlying operating system and network, including the ability to simulate the passing of time,</li>
+<li><em>Property-based testing</em> and <em>fuzzing</em> to deterministically generate complex test scenarios and check observable properties of the system-under-test, with the ability to <em>reproduce</em> failures,</li>
+<li>Analysis and reporting tools to help troubleshoot issues signaled by tests run.</li>
+</ol>
+<p>The team is responsible for packaging the system-under-test as a "cluster" of containers running and interacting within the simulated environment provided by the platform, for providing test clients and scenarios to explore, and for defining "interesting" properties to verify.</p>
+<p>Here is a diagram from <a href="https://antithesis.com/product/what_is_antithesis/" target="_blank" rel="noopener noreferrer">antithesis' website</a> summarizing how the platform works:</p>
+<p><img decoding="async" loading="lazy" src="https://antithesis.com/img_opt/igPT-jsSII-2034.webp" alt="" class="img_ev3q"></p>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="what-is-this-project-about">What is this project about?<a href="https://cardano-foundation.github.io/antithesis/kick-off-antithesis#what-is-this-project-about" class="hash-link" aria-label="Direct link to What is this project about?" title="Direct link to What is this project about?">​</a></h2>
+<p>While we strongly believe in the effectiveness of this approach especially as new components get developed, network grows, and new features are added to the protocol, and Antithesis has already been adopted by industry leaders like Confluent or Ethereum, we want to understand how this investment can yield value to the Cardano community <em>as a whole</em> in a perennial way.</p>
+<p>The long-term goal of this project is therefore to collectively build and maintain a testing infrastructure that can benefit the ecosystem and most notably those parties involved in the development and maintenance of the Cardano infrastructure: Nodes, protocols, and related tools. We envision this infrastructure to be governed through an open and transparent process which is yet to be defined by and for the <em>Cardano community</em> through whatever channels seem the most effective.</p>
+<p>In the short-term however, we need to experiment with the platform, understand what are its capabilities and limits, what it requires from the system-under-test in order to be the most effective, how powerful it is to find and troubleshoot bugs and security vulnerabilities, and more generally openly and candidly build a strong case for the governing bodies of the Cardano ecosystem to decide whether or not this investment shall be pursued.</p>
+<p>The phases and coarse-grained timeline of the project are documented in the <a href="https://github.com/cardano-foundation/antithesis" target="_blank" rel="noopener noreferrer">README</a>, and this blog post marks the beginning of the <em>Proof-of-Concept</em> period during which will collaborate with Antithesis to assess the tool.</p>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="why-should-you-care">Why should you care?<a href="https://cardano-foundation.github.io/antithesis/kick-off-antithesis#why-should-you-care" class="hash-link" aria-label="Direct link to Why should you care?" title="Direct link to Why should you care?">​</a></h2>
+<p>As already stated, the goal of this project is to evaluate whether the Cardano community, as a whole, could benefit from the continuous availability of Antithesis as a testing infrastructure. This means that if you have some expertise on Cardano, its components, the network, the protocol, and if you have ideas on properties we should be testing, scenarios we should investigate, faults and adversarial behaviours we should be prepared to face, we would be more than happy to hear from you!</p>
+<p>Concretely, this means that we expect from <em>you</em> as a Cardano enthusiast to help us with:</p>
+<ul>
+<li>Improving infrastructure code (eg. docker images, containers, compose files) we use to run tests, and defining particular setups to test,</li>
+<li>Defining and designing <a href="https://antithesis.com/docs/test_templates/" target="_blank" rel="noopener noreferrer">test</a> that explore "interesting" scenarios,</li>
+<li>Stating and refining properties that need to old, in specific or generic cases,</li>
+<li>Documenting the expected behaviour in such a way that can easily lead to test generations, for example under the umbrella of teh <a href="https://github.com/cardano-scaling/cardano-blueprint" target="_blank" rel="noopener noreferrer">Cardano Blueprint</a> project,</li>
+<li>Troubleshooting bugs and security vulnerabilities, following our <a href="https://github.com/cardano-foundation/antithesis/security/policy" target="_blank" rel="noopener noreferrer">Security policy</a>,</li>
+<li>...</li>
+</ul>]]></content>
+        <author>
+            <name>Arnaud Bailly</name>
+            <uri>https://github.com/abailly</uri>
+        </author>
+        <category label="Infrastructure" term="Infrastructure"/>
+    </entry>
+</feed>
