@@ -49,25 +49,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: 🏗  Publish config image
-      working-directory: compose
-      run: |
-        make publish-test-config-image testnet=${{ inputs.test || env.TESTNET }} registry=${{ env.REGISTRY }}
-
-    # this is where we should send a request on-chain
-    # for now we use the GHA provided by AT
-    - name: 🏃 Trigger Antithesis
-      uses: antithesishq/antithesis-trigger-action@v0.8
+    - id: anti
+      name: Get latest antithesis release tag
+      uses: pozetroninc/github-action-get-latest-release@master
       with:
-        notebook_name: cardano
-        tenant: cardano
-        username: ${{ secrets.ANTITHESIS_USERNAME }}
-        password: ${{ secrets.ANTITHESIS_PASSWORD }}
-        github_token: ${{ secrets.GH_PAT }}
-        images: ghcr.io/intersectmbo/cardano-node:latest;${{ env.REGISTRY }}/sidecar:latest;${{ env.REGISTRY }}/tracer:latest;${{ env.REGISTRY }}/tracer-sidecar:latest;${{ env.REGISTRY }}/configurator:latest
-        config_image: ${{ env.REGISTRY }}/config:latest
-        description: "Run ${{ inputs.test || env.TESTNET }}"
-        email_recipients: ${{ env.EMAILS }}
-        test_name: "${{ inputs.test || env.TESTNET }}"
-        additional_parameters: |-
-          antithesis.duration=${{ inputs.duration || env.DURATION }}
+        repository: cardano-foundation/antithesis
+
+    - name: Download anti CLI from latest release
+      uses: robinraju/release-downloader@v1.10
+      with:
+        repository: cardano-foundation/antithesis
+        tag: ${{ steps.anti.outputs.release }}
+        fileName: "anti-*-linux64.tar.gz"
+        out-file-path: "./anti-cli"
+        extract: true
+
+    - name: Install anti and print number of running test-runs
+      run: |
+        echo "Release: ${{ steps.anti.outputs.release }}"
+        ls -la anti-cli
+        # adjust the path/filename below if the extracted layout differs
+        sudo install -m 0755 anti-cli/anti /usr/local/bin/anti
+        anti facts test-runs running --whose cfhal | jq '. | length'
