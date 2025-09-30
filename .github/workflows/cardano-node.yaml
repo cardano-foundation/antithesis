@@ -49,25 +49,45 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: 🏗  Publish config image
-      working-directory: compose
-      run: |
-        make publish-test-config-image testnet=${{ inputs.test || env.TESTNET }} registry=${{ env.REGISTRY }}
-
-    # this is where we should send a request on-chain
-    # for now we use the GHA provided by AT
-    - name: 🏃 Trigger Antithesis
-      uses: antithesishq/antithesis-trigger-action@v0.8
+    - id: anti
+      name: Get latest antithesis release tag
+      uses: pozetroninc/github-action-get-latest-release@master
       with:
-        notebook_name: cardano
-        tenant: cardano
-        username: ${{ secrets.ANTITHESIS_USERNAME }}
-        password: ${{ secrets.ANTITHESIS_PASSWORD }}
-        github_token: ${{ secrets.GH_PAT }}
-        images: ghcr.io/intersectmbo/cardano-node:latest;${{ env.REGISTRY }}/sidecar:latest;${{ env.REGISTRY }}/tracer:latest;${{ env.REGISTRY }}/tracer-sidecar:latest;${{ env.REGISTRY }}/configurator:latest
-        config_image: ${{ env.REGISTRY }}/config:latest
-        description: "Run ${{ inputs.test || env.TESTNET }}"
-        email_recipients: ${{ env.EMAILS }}
-        test_name: "${{ inputs.test || env.TESTNET }}"
-        additional_parameters: |-
-          antithesis.duration=${{ inputs.duration || env.DURATION }}
+        repository: cardano-foundation/antithesis
+
+    - name: Download anti CLI from latest release
+      uses: robinraju/release-downloader@v1.10
+      with:
+        repository: cardano-foundation/antithesis
+        tag: ${{ steps.anti.outputs.release }}
+        fileName: "anti-*-linux64.tar.gz"
+        out-file-path: "./anti-cli"
+        extract: true
+
+    - name: Install anti
+      run: |
+        echo "Release: ${{ steps.anti.outputs.release }}"
+        ls -la anti-cli
+        sudo install -m 0755 anti-cli/anti /usr/local/bin/anti
+
+    - name: Submit test
+      env:
+        ANTI_GITHUB_PAT: ${{ secrets.ANTI_GITHUB_PAT }}
+        ANTI_WALLET_FILE: wallet.json
+        ANTI_SSH_FILE: cfhal_ed25519
+        ANTI_MPFS_HOST: ${{ vars.ANTI_MPFS_HOST }}
+        ANTI_TOKEN_ID: ${{ vars.ANTI_TOKEN_ID }}
+        ANTI_PLATFORM: github
+        ANTI_REQUESTER: cfhal
+      run: |
+        set -euo pipefail
+        printf '%s' "${{ secrets.ANTI_REQUESTER_WALLET }}" | base64 --decode > $ANTI_WALLET_FILE
+        printf '%s' "${{ secrets.ANTI_SSH_KEY }}" > $ANTI_SSH_FILE
+        TRY=$(anti facts test-runs --whose cfhal | jq 'map(select(.key.commitId == "${{ github.sha }}")) | length')
+        TRY=$(($TRY + 1)) # start with try=1
+        echo "TRY=$TRY"
+        # anti requester create-test -d compose/testnets/cardano_node_with_adversary -c ${{ github.sha }} -r "cardano-foundation/antithesis" --try $TRY -t 1
+        #
+    - name: Wait for results
+      run: |
+        echo "waiting... (todo: poll results)"
