@@ -44,7 +44,7 @@ x-cardano-relay-10-7-1: &cardano-relay-10-7-1
 x-amaru: &amaru
   # Amaru is relay-only in this testnet. It receives no stake pool keys,
   # no KES/VRF/opcert material, and no block-producing command.
-  image: ghcr.io/lambdasistemi/amaru-bootstrap-producer:6258c39552604a1f458d74399358937a63485b9e
+  image: ghcr.io/lambdasistemi/amaru-bootstrap-producer:5b3c1286cff943c0ac73e435e7e7c5a3485cdc3f
   entrypoint:
     - /bin/sh
   environment:
@@ -54,6 +54,14 @@ x-amaru: &amaru
     AMARU_LOG: info
     AMARU_TRACE: info
     AMARU_COLOR: never
+    # Genesis-derived global parameters (k=20, 1/f=5, scale=4, epochLength=400).
+    # Must match the producer's derivation from shelley-genesis.json.
+    AMARU_GLOBAL_CONSENSUS_SECURITY_PARAM: "20"
+    AMARU_GLOBAL_ACTIVE_SLOT_COEFF_INVERSE: "5"
+    AMARU_GLOBAL_EPOCH_LENGTH_SCALE_FACTOR: "4"
+    AMARU_GLOBAL_MAX_LOVELACE_SUPPLY: "45000000000000000"
+    AMARU_GLOBAL_SLOTS_PER_KES_PERIOD: "129600"
+    AMARU_GLOBAL_MAX_KES_EVOLUTION: "62"
   restart: always
   depends_on:
     bootstrap-producer:
@@ -147,7 +155,7 @@ services:
       - tracer:/tracer
 
   bootstrap-producer:
-    image: ghcr.io/lambdasistemi/amaru-bootstrap-producer:6258c39552604a1f458d74399358937a63485b9e
+    image: ghcr.io/lambdasistemi/amaru-bootstrap-producer:5b3c1286cff943c0ac73e435e7e7c5a3485cdc3f
     container_name: bootstrap-producer
     labels: *fault-exclude
     hostname: bootstrap-producer.example
@@ -281,23 +289,15 @@ services:
         fi
         mkdir -p /startup
         printf '%s\n' "$${HOSTNAME:-amaru-relay-1.example}" > /startup/amaru-relay-1.started
-        export AMARU_GLOBAL_CONSENSUS_SECURITY_PARAM=20
-        export AMARU_GLOBAL_ACTIVE_SLOT_COEFF_INVERSE=5
-        export AMARU_GLOBAL_EPOCH_LENGTH_SCALE_FACTOR=4
-        export AMARU_GLOBAL_MAX_LOVELACE_SUPPLY=45000000000000000
-        export AMARU_GLOBAL_SLOTS_PER_KES_PERIOD=129600
-        export AMARU_GLOBAL_MAX_KES_EVOLUTION=62
-        export AMARU_GLOBAL_SYSTEM_START=0
-        exec /bin/amaru run \
+        exec /bin/amaru node run \
           --network testnet_42 \
           --ledger-dir /srv/amaru/ledger.testnet_42.db \
           --chain-dir /srv/amaru/chain.testnet_42.db \
-          --era-history /amaru-runtime/era-history.json \
+          --era-history /srv/amaru/era-history.json \
           --listen-address 0.0.0.0:3001 \
           --peer-address relay1.example:3001
     volumes:
       - amaru-bundle:/bundle:ro
-      - ./amaru-runtime:/amaru-runtime:ro
       - amaru-startup:/startup
       - a1-state:/srv/amaru
     networks:
@@ -329,23 +329,15 @@ services:
         fi
         mkdir -p /startup
         printf '%s\n' "$${HOSTNAME:-amaru-relay-2.example}" > /startup/amaru-relay-2.started
-        export AMARU_GLOBAL_CONSENSUS_SECURITY_PARAM=20
-        export AMARU_GLOBAL_ACTIVE_SLOT_COEFF_INVERSE=5
-        export AMARU_GLOBAL_EPOCH_LENGTH_SCALE_FACTOR=4
-        export AMARU_GLOBAL_MAX_LOVELACE_SUPPLY=45000000000000000
-        export AMARU_GLOBAL_SLOTS_PER_KES_PERIOD=129600
-        export AMARU_GLOBAL_MAX_KES_EVOLUTION=62
-        export AMARU_GLOBAL_SYSTEM_START=0
-        exec /bin/amaru run \
+        exec /bin/amaru node run \
           --network testnet_42 \
           --ledger-dir /srv/amaru/ledger.testnet_42.db \
           --chain-dir /srv/amaru/chain.testnet_42.db \
-          --era-history /amaru-runtime/era-history.json \
+          --era-history /srv/amaru/era-history.json \
           --listen-address 0.0.0.0:3001 \
           --peer-address relay2.example:3001
     volumes:
       - amaru-bundle:/bundle:ro
-      - ./amaru-runtime:/amaru-runtime:ro
       - amaru-startup:/startup
       - a2-state:/srv/amaru
     networks:
