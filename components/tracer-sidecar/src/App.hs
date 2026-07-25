@@ -27,7 +27,7 @@ import Control.Concurrent
     , threadDelay
     )
 import Control.Concurrent.Async (async, link)
-import Control.Exception (SomeException, try)
+import Control.Exception (SomeException, fromException, try)
 import Control.Monad
     ( forM_
     , forever
@@ -52,6 +52,7 @@ import Data.Time (UTCTime, defaultTimeLocale, parseTimeM)
 import System.Directory
     ( listDirectory
     )
+import System.IO.Error (isDoesNotExistError)
 import System.Environment
     ( getArgs
     , getEnv
@@ -103,9 +104,17 @@ main = do
     forever $ do
         esubs <- try (listDirectory dir)
         case esubs of
-            Left (e :: SomeException) ->
-                putStrLn
-                    $ "Error listing directory " <> dir <> ": " <> show e
+            -- Until cardano-tracer creates the log root, listDirectory fails
+            -- with "does not exist". That is an expected startup race (and can
+            -- recur when fault injection recreates the volume), so wait quietly
+            -- rather than logging a misleading error each second.
+            Left (e :: SomeException)
+                | Just ioe <- fromException e
+                , isDoesNotExistError ioe ->
+                    pure ()
+                | otherwise ->
+                    putStrLn
+                        $ "Error listing directory " <> dir <> ": " <> show e
             Right subs -> do
                 seen <- readIORef seenRef
                 let current = Set.fromList $ fmap (dir </>) subs

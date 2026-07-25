@@ -194,7 +194,7 @@ services:
       - /tmp
 
   tracer-sidecar:
-    image: ghcr.io/cardano-foundation/cardano-node-antithesis/tracer-sidecar:5271661
+    image: ghcr.io/cardano-foundation/cardano-node-antithesis/tracer-sidecar:fbcd664
     container_name: tracer-sidecar
     hostname: tracer-sidecar.example
     labels:
