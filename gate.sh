@@ -6,10 +6,15 @@ set -euo pipefail
 
 git diff --check
 
-# tracer-sidecar property tests (hspec + golden). Prefer the hermetic nix build
-# of the test derivation; fall back to cabal in the component dir.
+# tracer-sidecar property tests (hspec + golden). Prefer the hermetic Nix build
+# and then execute the produced test binary from the component directory, which
+# the golden test uses as its working directory. Fall back to cabal otherwise.
 if command -v nix >/dev/null 2>&1 && [ -f components/tracer-sidecar/flake.nix ]; then
-  ( cd components/tracer-sidecar && nix build --quiet '.#tracer-sidecar-tests' )
+  (
+    cd components/tracer-sidecar
+    test_out=$(nix build --quiet --no-link --print-out-paths '.#tracer-sidecar-tests')
+    "$test_out/bin/test"
+  )
 else
   ( cd components/tracer-sidecar && cabal test --test-show-details=streaming )
 fi
