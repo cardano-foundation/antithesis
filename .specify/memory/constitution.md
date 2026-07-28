@@ -39,6 +39,8 @@ Every composer command must be executable locally via `docker compose -f testnet
 ### Hard gate: findings_new <= baseline
 A PR that changes the composer, a sidecar, or the testnet compose must run an Antithesis duration=1h on the branch before merge. If the run's `findings_new` is above the baseline on main (accounting for stable finding IDs that were already there), the PR does not merge.
 
+**Declared-property exemption.** A new finding does not count against the gate when it is produced by a property the PR itself intentionally adds, provided all of the following hold: the PR body names the property and states that its firing is the success signal; the failure it exposes is pre-existing (evidenced by an upstream issue or an event-stream search of a baseline run) rather than introduced by the PR; the property is proven both ways (a seeded or live failing case, and a clean passing case); and every other finding still satisfies `findings_new <= baseline`. Rationale: the gate exists to stop PRs *introducing* regressions; a property that *reveals* an existing failure is the observability this harness is for, and blocking it institutionalises blindness. The exemption is per-declared-property, never blanket — an undeclared new finding still blocks the merge.
+
 ## Development Workflow
 
 ### Ticket discipline
