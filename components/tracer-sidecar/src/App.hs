@@ -8,9 +8,14 @@
 module App
     ( main
     , tailJsonLinesFromTracerLogDir
+    , tailAmaruLogDir
     )
 where
 
+import Cardano.Antithesis.LogMessage
+    ( LogMessage
+    , mkAmaruLogMessage
+    )
 import Cardano.Antithesis.Sdk
     ( sometimesTracesDeclaration
     , sometimesTracesReached
@@ -27,7 +32,7 @@ import Control.Concurrent
     , threadDelay
     )
 import Control.Concurrent.Async (async, link)
-import Control.Exception (SomeException, try)
+import Control.Exception (IOException, SomeException, try)
 import Control.Monad
     ( forM_
     , forever
@@ -48,7 +53,12 @@ import Data.Maybe (isJust)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Text as Text
-import Data.Time (UTCTime, defaultTimeLocale, parseTimeM)
+import Data.Time
+    ( UTCTime
+    , defaultTimeLocale
+    , getCurrentTime
+    , parseTimeM
+    )
 import System.Directory
     ( listDirectory
     )
@@ -87,11 +97,22 @@ main = do
 
     (nPools :: Int) <- read <$> getEnv "POOLS"
     consumerHost <- fmap Text.pack <$> lookupEnv "AMARU_CONSUMER_HOST"
+    amaruLogDir <- lookupEnv "AMARU_LOG_DIR"
+    let amaruEnabled = isJust amaruLogDir
 
     writeSdkJsonl $ sometimesTracesDeclaration "find log files"
 
-    let spec = mkSpec nPools consumerHost
+    let spec = mkSpec nPools consumerHost amaruEnabled
     mvar <- newMVar =<< initialStateIO spec
+
+    forM_ amaruLogDir $ \logDir -> do
+        putStrLn $ "Tailing amaru log dir: " <> logDir
+        link
+            =<< async
+                ( tailAmaruLogDir
+                    logDir
+                    (modifyMVar_ mvar . flip (processMessageIO spec))
+                )
 
     -- Each cardano-node process gets its own subdirectory under `dir` once it
     -- handshakes with cardano-tracer. Those subdirectories appear over time
@@ -200,3 +221,83 @@ parsingNodeLogFile path = isJust $ do
         defaultTimeLocale
         "%Y-%m-%dT%H-%M-%S"
         timestamp
+
+-- | Watches a directory for the fixed Amaru relay log files
+-- (@amaru-relay-1.log@, @amaru-relay-2.log@) and ingests each
+-- appended line through 'mkAmaruLogMessage'.  Files created
+-- after the watcher starts are discovered on the next scan.
+-- Lines are read from the beginning of each file.
+tailAmaruLogDir
+    :: FilePath
+    -- ^ directory to watch
+    -> (LogMessage -> IO ())
+    -- ^ action on each normalized line
+    -> IO ()
+tailAmaruLogDir dir action = go mempty
+  where
+    relayFiles :: [FilePath]
+    relayFiles = ["amaru-relay-1.log", "amaru-relay-2.log"]
+
+    go :: Set FilePath -> IO ()
+    go seen = do
+        efiles <- try (listDirectory dir)
+        case efiles of
+            Left (e :: IOException) -> do
+                putStrLn
+                    $ "Error listing amaru log directory "
+                        <> dir
+                        <> ": "
+                        <> show e
+                threadDelay 1000000
+                go seen
+            Right files -> do
+                let current =
+                        Set.fromList
+                            $ filter (`elem` relayFiles) files
+                    new = current `Set.difference` seen
+                forM_ new $ \name -> do
+                    let path = dir </> name
+                    putStrLn $ "Tailing amaru log: " <> path
+                    link
+                        =<< async
+                            ( tailAmaruRelayFile
+                                path
+                                name
+                                action
+                            )
+                threadDelay 1000000
+                go (seen <> new)
+
+    tailAmaruRelayFile
+        :: FilePath
+        -> FilePath
+        -> (LogMessage -> IO ())
+        -> IO ()
+    tailAmaruRelayFile path name action = do
+        exited <- try
+            $ withFile path ReadMode
+            $ \h -> do
+                hSetBuffering h LineBuffering
+                forever $ do
+                    eof <- hIsEOF h
+                    if eof
+                        then threadDelay 10000
+                        else do
+                            l <- B8.hGetLine h
+                            now <- getCurrentTime
+                            action
+                                $ mkAmaruLogMessage
+                                    now
+                                    (Text.pack name)
+                                    (Text.pack $ B8.unpack l)
+        case exited of
+            Left (e :: SomeException) ->
+                putStrLn
+                    $ "Error reading amaru log "
+                        <> path
+                        <> ": "
+                        <> show e
+            Right _ ->
+                putStrLn
+                    $ "Finished reading amaru log: "
+                        <> path
