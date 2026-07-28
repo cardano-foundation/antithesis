@@ -29,11 +29,11 @@ mirror.
 regular file; killing the active mirror preserves Amaru PID 1 and restart count
 and yields a replacement mirror; live ordinary/fatal fixtures reach SDK output.
 
-- [ ] T008 [US2] Route both relay stdout/stderr to per-relay regular files and supervise the stdout mirrors in `testnets/cardano_amaru/docker-compose.yaml`
-- [ ] T009 [US2] Add the shared log volume to both relays and mount it read-only with `AMARU_LOG_DIR` in tracer-sidecar in `testnets/cardano_amaru/docker-compose.yaml`
-- [ ] T010 [US3] Pin tracer-sidecar to the preceding Slice 1 commit without changing the `amaru-consumer-seed` image line in `testnets/cardano_amaru/docker-compose.yaml`
-- [ ] T011 [US2] Prove mirror kill/restart, unchanged Amaru PID 1/restart count, regular-file descriptor, and resumed stdout against the final compose construction
-- [ ] T012 [US3] Prove live ordinary and fatal file-to-SDK paths, run compose validation and root `./gate.sh`, and commit exactly `fix(cardano_amaru): route amaru logs to sidecar`
+- [X] T008 [US2] Route both relay stdout/stderr to per-relay regular files and supervise the stdout mirrors in `testnets/cardano_amaru/docker-compose.yaml`
+- [X] T009 [US2] Add the shared log volume to both relays and mount it read-only with `AMARU_LOG_DIR` in tracer-sidecar in `testnets/cardano_amaru/docker-compose.yaml`
+- [X] T010 [US3] Pin tracer-sidecar to the preceding Slice 1 commit without changing the `amaru-consumer-seed` image line in `testnets/cardano_amaru/docker-compose.yaml`
+- [X] T011 [US2] Prove mirror kill/restart, unchanged Amaru PID 1/restart count, regular-file descriptor, and resumed stdout against the final compose construction
+- [X] T012 [US3] Prove live ordinary and fatal file-to-SDK paths, run compose validation and root `./gate.sh`, and commit exactly `fix(cardano_amaru): route amaru logs to sidecar`
 
 ## Finalization - orchestrator-owned verification and PR metadata
 

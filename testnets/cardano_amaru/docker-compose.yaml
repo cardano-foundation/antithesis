@@ -287,19 +287,34 @@ services:
           find /srv/amaru -mindepth 1 -maxdepth 1 -exec rm -rf {} +
           cp -rL /bundle/testnet_42/. /srv/amaru/
         fi
-        mkdir -p /startup
+        mkdir -p /startup /tmp /opt/amaru-logs
         printf '%s\n' "$${HOSTNAME:-amaru-relay-1.example}" > /startup/amaru-relay-1.started
+        log_file=/opt/amaru-logs/amaru-relay-1.log
+        touch "$$log_file"
+        mirror_log() {
+          while :; do
+            tail -n 0 -F "$$log_file" &
+            mirror_pid=$$!
+            printf '%s\n' "$$mirror_pid" > /tmp/amaru-log-mirror.pid
+            wait "$$mirror_pid" || true
+            sleep 1
+          done
+        }
+        mirror_log &
+        printf '%s\n' "$$!" > /tmp/amaru-log-mirror-supervisor.pid
         exec /bin/amaru node run \
           --network testnet_42 \
           --ledger-dir /srv/amaru/ledger.testnet_42.db \
           --chain-dir /srv/amaru/chain.testnet_42.db \
           --era-history /srv/amaru/era-history.json \
           --listen-address 0.0.0.0:3001 \
-          --peer-address relay1.example:3001
+          --peer-address relay1.example:3001 \
+          >>"$$log_file" 2>&1
     volumes:
       - amaru-bundle:/bundle:ro
       - amaru-startup:/startup
       - a1-state:/srv/amaru
+      - amaru-logs:/opt/amaru-logs
     networks:
       default:
       amaru-consumer-net:
@@ -327,19 +342,34 @@ services:
           find /srv/amaru -mindepth 1 -maxdepth 1 -exec rm -rf {} +
           cp -rL /bundle/testnet_42/. /srv/amaru/
         fi
-        mkdir -p /startup
+        mkdir -p /startup /tmp /opt/amaru-logs
         printf '%s\n' "$${HOSTNAME:-amaru-relay-2.example}" > /startup/amaru-relay-2.started
+        log_file=/opt/amaru-logs/amaru-relay-2.log
+        touch "$$log_file"
+        mirror_log() {
+          while :; do
+            tail -n 0 -F "$$log_file" &
+            mirror_pid=$$!
+            printf '%s\n' "$$mirror_pid" > /tmp/amaru-log-mirror.pid
+            wait "$$mirror_pid" || true
+            sleep 1
+          done
+        }
+        mirror_log &
+        printf '%s\n' "$$!" > /tmp/amaru-log-mirror-supervisor.pid
         exec /bin/amaru node run \
           --network testnet_42 \
           --ledger-dir /srv/amaru/ledger.testnet_42.db \
           --chain-dir /srv/amaru/chain.testnet_42.db \
           --era-history /srv/amaru/era-history.json \
           --listen-address 0.0.0.0:3001 \
-          --peer-address relay2.example:3001
+          --peer-address relay2.example:3001 \
+          >>"$$log_file" 2>&1
     volumes:
       - amaru-bundle:/bundle:ro
       - amaru-startup:/startup
       - a2-state:/srv/amaru
+      - amaru-logs:/opt/amaru-logs
     networks:
       default:
       amaru-consumer-net:
@@ -391,7 +421,7 @@ services:
       - /tmp
 
   tracer-sidecar:
-    image: ghcr.io/cardano-foundation/cardano-node-antithesis/tracer-sidecar:e01ad90
+    image: ghcr.io/cardano-foundation/cardano-node-antithesis/tracer-sidecar:a94197a
     container_name: tracer-sidecar
     labels: *fault-exclude
     hostname: tracer-sidecar.example
@@ -401,8 +431,10 @@ services:
       POOLS: "3"
       CHAINPOINT_FILEPATH: "/opt/cardano-tracer/chainPoints.log"
       AMARU_CONSUMER_HOST: amaru-consumer.example
+      AMARU_LOG_DIR: /opt/amaru-logs
     volumes:
       - tracer:/opt/cardano-tracer
+      - amaru-logs:/opt/amaru-logs:ro
     restart: always
     depends_on:
       tracer:
@@ -436,6 +468,7 @@ volumes:
   a1-state:
   a2-state:
   amaru-consumer-state:
+  amaru-logs:
 
 networks:
   default:
