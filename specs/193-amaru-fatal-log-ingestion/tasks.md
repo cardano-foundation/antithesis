@@ -37,10 +37,10 @@ and yields a replacement mirror; live ordinary/fatal fixtures reach SDK output.
 
 ## Finalization - orchestrator-owned verification and PR metadata
 
-- [ ] T013 Verify all GitHub checks including `Compose smoke test` are green and preserve their URLs/results in the evidence record
-- [ ] T014 Independently rerun the final gate, audit raw mirror/ingestion proofs, and confirm the forbidden consumer-seed line is unchanged
-- [ ] T015 Launch exactly one one-hour `cardano_amaru` Antithesis run, confirm both new properties surface, record `findings_new` against the accepted main baseline, and never retry to select a cleaner schedule
-- [ ] T016 Refresh the human-readable PR body including #196's incidentally-correct image pairing; run finalization audit; retain `gate.sh` and draft/not-ready state; report the one-shot result and hand the readiness decision to the parent without merging
+- [X] T013 Verify all GitHub checks including `Compose smoke test` are green and preserve their URLs/results in the evidence record
+- [X] T014 Independently rerun the final gate, audit raw mirror/ingestion proofs, and confirm the forbidden consumer-seed line is unchanged
+- [X] T015 Launch exactly one one-hour `cardano_amaru` Antithesis run, confirm both new properties surface, record `findings_new` against the accepted main baseline, and never retry to select a cleaner schedule
+- [X] T016 Refresh the human-readable PR body including #196's incidentally-correct image pairing; run finalization audit; retain `gate.sh` and draft/not-ready state; report the one-shot result and hand the readiness decision to the parent without merging
 
 ## Dependencies and execution order
 
