@@ -12,13 +12,13 @@ route coverage and fatal-consensus failure.
 invariant; each fatal signature fails it; disabled ingestion declares neither;
 an appended relay-file line is normalized with exact host and message.
 
-- [ ] T001 [US1] RED: add failing ordinary-line and both-fatal-signature assertion tests in `components/tracer-sidecar/test/Spec.hs`
-- [ ] T002 [US2] RED: add failing disabled-configuration and appended-relay-file ingestion tests in `components/tracer-sidecar/test/Spec.hs`
-- [ ] T003 [US1] Add the normalized Amaru stdout payload and evidence adapter in `components/tracer-sidecar/src/Cardano/Antithesis/LogMessage.hs`
-- [ ] T004 [US2] Add optional relay-file discovery and line following in `components/tracer-sidecar/src/App.hs`
-- [ ] T005 [US1] Add conditional `amaru stdout observed` and `no fatal amaru consensus logs` rules in `components/tracer-sidecar/src/Cardano/Antithesis/Sidecar.hs`
-- [ ] T006 [US1] Document configuration, event details, signatures, and non-vacuity behavior in `components/tracer-sidecar/README.md`
-- [ ] T007 [US1] GREEN: run focused tests, `just format`, `just hlint`, and root `./gate.sh`; commit exactly `fix(tracer-sidecar): score fatal amaru logs`
+- [X] T001 [US1] RED: add failing ordinary-line and both-fatal-signature assertion tests in `components/tracer-sidecar/test/Spec.hs`
+- [X] T002 [US2] RED: add failing disabled-configuration and appended-relay-file ingestion tests in `components/tracer-sidecar/test/Spec.hs`
+- [X] T003 [US1] Add the normalized Amaru stdout payload and evidence adapter in `components/tracer-sidecar/src/Cardano/Antithesis/LogMessage.hs`
+- [X] T004 [US2] Add optional relay-file discovery and line following in `components/tracer-sidecar/src/App.hs`
+- [X] T005 [US1] Add conditional `amaru stdout observed` and `no fatal amaru consensus logs` rules in `components/tracer-sidecar/src/Cardano/Antithesis/Sidecar.hs`
+- [X] T006 [US1] Document configuration, event details, signatures, and non-vacuity behavior in `components/tracer-sidecar/README.md`
+- [X] T007 [US1] GREEN: run focused tests, `just format`, `just hlint`, and root `./gate.sh`; commit exactly `fix(tracer-sidecar): score fatal amaru logs`
 
 ## Slice 2 - fault-contained compose routing and image pin
 

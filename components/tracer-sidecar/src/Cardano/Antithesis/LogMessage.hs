@@ -12,6 +12,7 @@ module Cardano.Antithesis.LogMessage
     , LogMessageData (..)
     , NewTipSelectView (..)
     , Severity (..)
+    , mkAmaruLogMessage
     ) where
 
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -19,14 +20,20 @@ import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Aeson
     ( FromJSON (..)
     , Value (..)
+    , object
     , withObject
     , withText
     , (.:)
     , (.:?)
+    , (.=)
+    )
+import Data.Maybe
+    ( fromMaybe
     )
 import Data.Text
     ( Text
     )
+import qualified Data.Text as T
 import Data.Time
     ( UTCTime
     )
@@ -59,6 +66,13 @@ data LogMessageData
         }
     | ServerError
         { reason :: Text
+        }
+    | -- | A plain line ingested from an Amaru relay's container
+      -- stdout.  Carries the normalized evidence fields from
+      -- @contracts/amaru-log-event.md@.
+      AmaruStdout
+        { amaruSource :: Text
+        , amaruMessage :: Text
         }
     deriving (Show, Generic, Eq)
 
@@ -193,3 +207,48 @@ instance FromJSON Severity where
         "Error" -> pure SevError
         "Critical" -> pure Critical
         _ -> fail $ "Unknown severity: " <> show t
+
+-- Amaru stdout adapter --------------------------------------------------------
+
+-- | Normalize an ingested Amaru relay line into the event
+-- pipeline.  The relay filename loses its @.log@ suffix to
+-- become the host identity; the trailing newline (if present)
+-- is stripped from the message.  Severity is 'Info' so the
+-- line cannot trip the existing critical-node-log rule.
+mkAmaruLogMessage
+    :: UTCTime
+    -- ^ ingestion time
+    -> Text
+    -- ^ relay filename, e.g. @"amaru-relay-1.log"@
+    -> Text
+    -- ^ complete raw line
+    -> LogMessage
+mkAmaruLogMessage ingestionTime relayFilename rawLine =
+    LogMessage
+        { at = ingestionTime
+        , ns = "amaru"
+        , details =
+            AmaruStdout
+                { amaruSource = source
+                , amaruMessage = line
+                }
+        , sev = Info
+        , thread = "amaru-stdout"
+        , host = relayHost
+        , kind = "AmaruStdout"
+        , json = evidence
+        }
+  where
+    source = "amaru-container-stdout" :: Text
+    relayHost =
+        fromMaybe relayFilename
+            $ T.stripSuffix ".log" relayFilename
+    line =
+        fromMaybe rawLine
+            $ T.stripSuffix "\n" rawLine
+    evidence =
+        object
+            [ "source" .= source
+            , "host" .= relayHost
+            , "message" .= line
+            ]

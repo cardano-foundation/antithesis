@@ -49,6 +49,7 @@ import Control.Arrow
     )
 import Control.Monad
     ( forM_
+    , when
     )
 import Control.Monad.Trans.Writer.Strict
     ( Writer
@@ -94,8 +95,8 @@ defaultK = 432
 defaultDepthCap :: Int
 defaultDepthCap = defaultK * 2
 
-mkSpec :: Int -> Maybe Text -> Spec
-mkSpec nPools consumerHost = do
+mkSpec :: Int -> Maybe Text -> Bool -> Spec
+mkSpec nPools consumerHost amaruEnabled = do
     mapM_
         sometimesTraces
         [ "TraceAddBlockEvent.SwitchedToAFork"
@@ -118,6 +119,22 @@ mkSpec nPools consumerHost = do
 
     forM_ consumerHost $ \host ->
         amaruConsumerConvergenceProbe nPools host
+
+    when amaruEnabled $ do
+        sometimes "amaru stdout observed" $ \_s LogMessage{details} ->
+            case details of
+                AmaruStdout{} -> True
+                _ -> False
+        alwaysOrUnreachable "no fatal amaru consensus logs"
+            $ \_s LogMessage{details} ->
+                case details of
+                    AmaruStdout{amaruMessage} ->
+                        not
+                            $ T.isInfixOf "Consensus died" amaruMessage
+                                || T.isInfixOf
+                                    "attempted roll back in the future"
+                                    amaruMessage
+                    _ -> True
   where
     -- Issue #123, Layer 2 was here — a "did the adversary appear in
     -- some producer's InboundGovernor stream" probe via substring
@@ -452,10 +469,10 @@ isProducerHost nPools host =
     let stem = hostStem host
     in  stem
             `Set.member` Set.fromList
-                ( [ "p" <> T.pack (show i) | i <- [1 :: Int .. nPools] ]
-                    ++ [ "relay" <> T.pack (show i) | i <- [1 :: Int .. nPools] ]
-                    ++ [ "amaru-relay-" <> T.pack (show i) | i <- [1 :: Int .. nPools] ]
-                    ++ [ "bootstrap-producer" ]
+                ( ["p" <> T.pack (show i) | i <- [1 :: Int .. nPools]]
+                    ++ ["relay" <> T.pack (show i) | i <- [1 :: Int .. nPools]]
+                    ++ ["amaru-relay-" <> T.pack (show i) | i <- [1 :: Int .. nPools]]
+                    ++ ["bootstrap-producer"]
                 )
 
 sameHost :: Text -> Text -> Bool
