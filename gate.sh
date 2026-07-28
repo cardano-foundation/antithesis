@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Mechanical gate for the feat/consumer-convergence-property PR (#180).
-# The tracer-sidecar test suite is the RED->GREEN harness for the property.
+# Mechanical gate for amaru fatal-log ingestion and scoring (#193).
+# The tracer-sidecar test suite is the RED -> GREEN harness for the ingestion
+# path and property; compose validation protects the deployment wiring.
 set -euo pipefail
 
 git diff --check
@@ -13,14 +14,8 @@ else
   ( cd components/tracer-sidecar && cabal test --test-show-details=streaming )
 fi
 
-# Compose still validates with the tracer-sidecar env + image bump (slice 2).
+# The cardano_amaru deployment must remain valid as log routing evolves.
 INTERNAL_NETWORK=false docker compose \
   -f testnets/cardano_amaru/docker-compose.yaml config >/dev/null
-
-# master must NOT gain the consumer convergence env (would redden master runs).
-if grep -nE 'AMARU_CONSUMER_HOST' testnets/cardano_node_master/docker-compose.yaml >/dev/null 2>&1; then
-  echo "gate: cardano_node_master must not set AMARU_CONSUMER_HOST" >&2
-  exit 1
-fi
 
 echo "gate: OK"
