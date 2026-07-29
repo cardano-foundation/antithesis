@@ -2,7 +2,7 @@
 
 ## Slice 1 — Add and wire the contract check
 
-- [ ] T202 Implement the dynamic producer-image checker; prove seeded drift
+- [X] T202 Implement the dynamic producer-image checker; prove seeded drift
   and tag-only failures; prove the clean pass; wire the checker into the
   tracked local gate and PR-triggered workflow; land one reviewed bisect-safe
   commit.
@@ -18,4 +18,3 @@
 - [ ] Launch the closing 60-minute Antithesis run from final `main`.
 - [ ] Deliver full per-property accounting: #1098 signatures absent, only
   #1104 and #140 expected red, every other red treated as a genuine finding.
-
