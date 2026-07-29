@@ -6,6 +6,10 @@ set -euo pipefail
 
 git diff --check
 
+# Amaru producer-image contract (#202): every Compose reference must be
+# digest-pinned and all must be identical.
+scripts/check-amaru-producer-image-refs.sh
+
 # tracer-sidecar property tests (hspec + golden). Prefer the hermetic Nix build
 # and then execute the produced test binary from the component directory, which
 # the golden test uses as its working directory. Fall back to cabal otherwise.
