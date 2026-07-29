@@ -2,7 +2,7 @@
 
 ## Slice 1 — Repin all Compose consumers
 
-- [ ] T195 Replace exactly three producer-image references with the binding
+- [X] T195 Replace exactly three producer-image references with the binding
   tag-plus-digest; prove the old/new censuses in both directions; run Compose
   validation, the full gate, and the `cardano_amaru` smoke; land one reviewed
   bisect-safe commit.
