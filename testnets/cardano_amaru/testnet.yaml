@@ -1,0 +1,151 @@
+--- # Required Testnet Parameters
+poolCount: 3
+poolCost: 340000000
+poolMargin: 0.0
+poolPledge: 0
+delegatedSupply: 600000000000000
+systemStart: 'now'
+systemStartDelay: 5
+networkMagic: 42
+testnetDomain: example
+
+--- # Optional Byron Genesis Overide
+protocolConsts:
+  k: 5
+
+--- # Optional Shelley Genesis Overide
+# Fast-bootstrap profile for the Amaru relay proof. The producer waits until
+# two complete Conway epochs are behind the immutable tip before it can build
+# the bundle, so this profile must keep that wait short. Two coupled constraints:
+#  1. Rewards: epochLength MUST exceed the stability and randomness windows
+#     (3k/f and 4k/f); else the stake snapshot never stabilizes in-epoch and the
+#     relay dies with RewardsSummaryNotReady at the first boundary.
+#  2. Bootstrap: "2 epochs behind the immutable tip" must complete within the
+#     Antithesis setup-time budget (~vtime 414). epochLength=256 needed ~slot 900
+#     (~15 min) and timed out before Amaru ever started (every run incomplete).
+# k=5, f=0.2 => windows 75 and 100, both < epochLength=125, AND the bootstrap
+# reaches 2-epochs-behind-immutable by ~slot 320 (~5 min). Keep scoped to
+# cardano_amaru; do not copy back to cardano_node_master.
+#  3. Amaru model: epoch_length MUST equal k*(1/f)*scale_factor (integer
+#     scale_factor) — pragma-org/amaru #963 removed the direct epoch_length
+#     override. k=5,1/f=5 => epoch_length is a multiple of 25; 125 is the
+#     smallest that also clears the 100-slot randomness window (scale_factor=5).
+epochLength: 125
+securityParam: 5
+activeSlotsCoeff: 0.2
+maxLovelaceSupply: 45000000000000000
+protocolParams:
+  decentralisationParam: 0
+  protocolVersion:
+    major: 10
+    minor: 0
+
+--- # Optional Alonzo Genesis Overide
+
+--- # Optional Conway Genesis Overide
+
+--- # Optional Node Config Overide
+ExperimentalHardForksEnabled: true
+ExperimentalProtocolsEnabled: true
+LastKnownBlockVersion-Alt: 0
+LastKnownBlockVersion-Major: 6
+LastKnownBlockVersion-Minor: 0
+MaxConcurrencyBulkSync: 2
+MaxConcurrencyDeadline: 4
+MaxKnownMajorProtocolVersion: 2
+PeerSharing: true
+TargetNumberOfActiveBigLedgerPeers: 2
+TargetNumberOfActivePeers: 3
+TargetNumberOfEstablishedBigLedgerPeers: 3
+TargetNumberOfEstablishedPeers: 3
+TargetNumberOfKnownBigLedgerPeers: 10
+TargetNumberOfKnownPeers: 30
+TargetNumberOfRootPeers: 10
+TestAllegraHardForkAtEpoch: 0
+TestAlonzoHardForkAtEpoch: 0
+TestBabbageHardForkAtEpoch: 0
+TestConwayHardForkAtEpoch: 0
+TestMaryHardForkAtEpoch: 0
+TestShelleyHardForkAtEpoch: 0
+TraceConnectionManager: true
+TraceConnectionManagerTransitions: true
+TraceDNSResolver: true
+TraceDNSSubscription: true
+TraceDebugPeerSelection: true
+TraceForge: true
+TraceForgeStateInfo: true
+TraceHandshake: true
+TraceInboundGovernor: true
+TraceIpSubscription: true
+TraceLedgerPeers: true
+TraceLocalConnectionManager: true
+TraceLocalHandshake: true
+TraceLocalRootPeers: true
+TracePeerSelection: true
+TracePeerSelectionActions: true
+TracePublicRootPeers: true
+TraceServer: true
+TurnOnLoggingMetrics: true
+TurnOnLogging: true
+UseTraceDispatcher: true
+TraceOptionForwarder:
+  connQueueSize: 64
+  disconnQueueSize: 128
+  maxReconnectDeplay: 30
+TraceOptions:
+  '':
+    backends:
+    - EKGBackend
+    - Forwarder
+    detail: DNormal
+    severity: Notice
+  BlockFetch.Client.CompletedBlockFetch:
+    maxFrequency: 2
+  BlockFetch.Decision:
+    severity: Silence
+  ChainDB:
+    severity: Info
+  ChainDB.AddBlockEvent.AddBlockValidation:
+    severity: Silence
+  ChainDB.AddBlockEvent.AddBlockValidation.ValidCandidate:
+    maxFrequency: 2
+  ChainDB.AddBlockEvent.AddedBlockToQueue:
+    maxFrequency: 2
+  ChainDB.AddBlockEvent.AddedBlockToVolatileDB:
+    maxFrequency: 2
+  ChainDB.CopyToImmutableDBEvent.CopiedBlockToImmutableDB:
+    maxFrequency: 2
+  ChainSync.Client:
+    severity: Warning
+  Forge.Loop:
+    severity: Info
+  Forge.StateInfo:
+    severity: Info
+  Mempool:
+    severity: Silence
+  Net.ConnectionManager.Remote:
+    severity: Info
+  Net.ConnectionManager.Remote.ConnectionManagerCounters:
+    severity: Silence
+  Net.ErrorPolicy:
+    severity: Info
+  Net.ErrorPolicy.Local:
+    severity: Info
+  Net.InboundGovernor:
+    severity: Warning
+  Net.InboundGovernor.Remote:
+    severity: Info
+  Net.Mux.Remote:
+    severity: Info
+  Net.PeerSelection:
+    severity: Silence
+  Net.PeerSelection.Actions:
+    severity: Info
+  Net.Subscription.DNS:
+    severity: Info
+  Net.Subscription.IP:
+    severity: Info
+  Resources:
+    severity: Silence
+  Startup.DiffusionInit:
+    severity: Info

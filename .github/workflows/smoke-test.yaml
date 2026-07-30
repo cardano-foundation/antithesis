@@ -17,8 +17,12 @@ jobs:
   smoke-test:
     name: Smoke test
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
       - name: Run smoke test
         run: ./scripts/smoke-test.sh cardano_node_master 600
+      - name: Run smoke test (cardano_amaru)
+        env:
+          AMARU_BOOTSTRAP_SMOKE_TIMEOUT: "900"
+        run: ./scripts/smoke-test.sh cardano_amaru 700

@@ -68,6 +68,213 @@ done
 # Always assertion enforces the cluster-wide unrecoverable-divergence
 # bound at runtime.
 
+# cardano_amaru: prove the amaru bootstrap pipeline. bootstrap-producer
+# builds the bundle (create-snapshots + bootstrap) and exits 0; the two
+# relay-only amaru nodes then consume it, exec `amaru run`, and stay up.
+if [[ "$TESTNET" == cardano_amaru* ]]; then
+  BOOTSTRAP_TIMEOUT="${AMARU_BOOTSTRAP_SMOKE_TIMEOUT:-1500}"
+  AMARU_CONSUMER_TIMEOUT="${AMARU_CONSUMER_CONVERGE_TIMEOUT:-300}"
+
+  inspect_status() {
+    docker inspect -f '{{.State.Status}}' "$1" 2>/dev/null || true
+  }
+
+  inspect_exit_code() {
+    docker inspect -f '{{.State.ExitCode}}' "$1" 2>/dev/null || echo -1
+  }
+
+  inspect_restart_count() {
+    docker inspect -f '{{.RestartCount}}' "$1" 2>/dev/null || echo 0
+  }
+
+  query_tip() {
+    docker compose -f "$COMPOSE_FILE" exec -T "$1" \
+      cardano-cli query tip --testnet-magic "$MAGIC" --socket-path /state/node.socket
+  }
+
+  tip_block() {
+    printf '%s\n' "$1" | sed -nE 's/.*"block"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' | head -1
+  }
+
+  tip_slot() {
+    printf '%s\n' "$1" | sed -nE 's/.*"slot"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' | head -1
+  }
+
+  tip_hash() {
+    printf '%s\n' "$1" | sed -nE 's/.*"hash"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' | head -1
+  }
+
+  tip_summary() {
+    local TIP_JSON="$1"
+    local BLOCK SLOT HASH
+    BLOCK="$(tip_block "$TIP_JSON")"
+    SLOT="$(tip_slot "$TIP_JSON")"
+    HASH="$(tip_hash "$TIP_JSON")"
+    printf 'block=%s slot=%s hash=%s' "${BLOCK:-unknown}" "${SLOT:-unknown}" "${HASH:-unknown}"
+  }
+
+  print_tip_diagnostic() {
+    local LABEL="$1"
+    local SERVICE="$2"
+    local TIP_JSON
+    if TIP_JSON="$(query_tip "$SERVICE" 2>/dev/null)"; then
+      echo "${LABEL} tip: $(tip_summary "$TIP_JSON")"
+    else
+      echo "${LABEL} tip: unavailable"
+    fi
+  }
+
+  N0_SUMMARY="unavailable"
+  fail_amaru_consumer() {
+    local REASON="$1"
+    echo "FAIL: ${REASON}"
+    print_tip_diagnostic "amaru-consumer" amaru-consumer
+    print_tip_diagnostic "p1" p1
+    echo "N0: ${N0_SUMMARY}"
+    docker compose -f "$COMPOSE_FILE" logs --tail 60 amaru-consumer 2>&1 || true
+    exit 1
+  }
+
+  echo "Waiting for bootstrap-producer to build the bundle (timeout ${BOOTSTRAP_TIMEOUT}s)..."
+  BP_DEADLINE=$((SECONDS + BOOTSTRAP_TIMEOUT))
+  while true; do
+    BP_STATE="$(docker inspect -f '{{.State.Status}}' bootstrap-producer 2>/dev/null || true)"
+    BP_EXIT="$(docker inspect -f '{{.State.ExitCode}}' bootstrap-producer 2>/dev/null || echo -1)"
+    if [ "$BP_STATE" = "exited" ] && [ "$BP_EXIT" = "0" ]; then
+      echo "OK: bootstrap-producer built the bundle (exit 0)"; break
+    fi
+    if [ "$BP_STATE" = "exited" ] && [ "$BP_EXIT" != "0" ]; then
+      echo "FAIL: bootstrap-producer exited ${BP_EXIT}"
+      docker compose -f "$COMPOSE_FILE" logs --tail 60 bootstrap-producer 2>&1; exit 1
+    fi
+    if [ "$SECONDS" -ge "$BP_DEADLINE" ]; then
+      echo "FAIL: bootstrap-producer did not finish within ${BOOTSTRAP_TIMEOUT}s (state=${BP_STATE})"
+      docker compose -f "$COMPOSE_FILE" logs --tail 60 bootstrap-producer 2>&1; exit 1
+    fi
+    sleep 10
+  done
+  for RELAY in amaru-relay-1 amaru-relay-2; do
+    echo "Waiting for ${RELAY} to consume the bundle and run amaru..."
+    R_DEADLINE=$((SECONDS + 180))
+    while [ "$(docker inspect -f '{{.State.Status}}' "$RELAY" 2>/dev/null || true)" != "running" ]; do
+      if [ "$SECONDS" -ge "$R_DEADLINE" ]; then
+        echo "FAIL: ${RELAY} not running after bootstrap"
+        docker compose -f "$COMPOSE_FILE" logs --tail 60 "$RELAY" 2>&1; exit 1
+      fi
+      sleep 5
+    done
+    RB="$(docker inspect -f '{{.RestartCount}}' "$RELAY")"; sleep 20
+    RA="$(docker inspect -f '{{.RestartCount}}' "$RELAY" 2>/dev/null || echo x)"
+    if [ "$(docker inspect -f '{{.State.Status}}' "$RELAY" 2>/dev/null)" != "running" ] || [ "$RB" != "$RA" ]; then
+      echo "FAIL: ${RELAY} did not stay running (restarts ${RB}->${RA})"
+      docker compose -f "$COMPOSE_FILE" logs --tail 60 "$RELAY" 2>&1; exit 1
+    fi
+    echo "OK: ${RELAY} consumed bundle and stayed running"
+  done
+
+  echo "Waiting for amaru-consumer-seed to seed the consumer state (timeout ${AMARU_CONSUMER_TIMEOUT}s)..."
+  SEED_DEADLINE=$((SECONDS + AMARU_CONSUMER_TIMEOUT))
+  while true; do
+    SEED_STATE="$(inspect_status amaru-consumer-seed)"
+    SEED_EXIT="$(inspect_exit_code amaru-consumer-seed)"
+    if [ "$SEED_STATE" = "exited" ] && [ "$SEED_EXIT" = "0" ]; then
+      echo "OK: amaru-consumer-seed seeded the consumer state (exit 0)"
+      break
+    fi
+    if [ "$SEED_STATE" = "exited" ] && [ "$SEED_EXIT" != "0" ]; then
+      echo "FAIL: amaru-consumer-seed exited ${SEED_EXIT}"
+      docker compose -f "$COMPOSE_FILE" logs --tail 60 amaru-consumer-seed 2>&1 || true
+      fail_amaru_consumer "amaru-consumer-seed failed before consumer convergence"
+    fi
+    if [ "$SECONDS" -ge "$SEED_DEADLINE" ]; then
+      echo "FAIL: amaru-consumer-seed did not finish within ${AMARU_CONSUMER_TIMEOUT}s (state=${SEED_STATE})"
+      docker compose -f "$COMPOSE_FILE" logs --tail 60 amaru-consumer-seed 2>&1 || true
+      fail_amaru_consumer "amaru-consumer-seed timed out before consumer convergence"
+    fi
+    sleep 5
+  done
+
+  echo "Waiting for amaru-consumer to run (timeout ${AMARU_CONSUMER_TIMEOUT}s)..."
+  CONSUMER_READY_DEADLINE=$((SECONDS + AMARU_CONSUMER_TIMEOUT))
+  CONSUMER_RESTARTS="unknown"
+  while true; do
+    CONSUMER_STATE="$(inspect_status amaru-consumer)"
+    CONSUMER_RESTARTS_NOW="$(inspect_restart_count amaru-consumer)"
+    if [ "$CONSUMER_RESTARTS_NOW" != "0" ]; then
+      fail_amaru_consumer "amaru-consumer restarted before readiness (restarts=${CONSUMER_RESTARTS_NOW})"
+    fi
+    if [ "$CONSUMER_STATE" = "running" ]; then
+      CONSUMER_RESTARTS="$CONSUMER_RESTARTS_NOW"
+      echo "OK: amaru-consumer running (restarts=${CONSUMER_RESTARTS})"
+      break
+    fi
+    if [ "$CONSUMER_STATE" = "exited" ] || [ "$CONSUMER_STATE" = "dead" ]; then
+      fail_amaru_consumer "amaru-consumer crashed before readiness (state=${CONSUMER_STATE})"
+    fi
+    if [ "$SECONDS" -ge "$CONSUMER_READY_DEADLINE" ]; then
+      fail_amaru_consumer "amaru-consumer did not run within ${AMARU_CONSUMER_TIMEOUT}s (state=${CONSUMER_STATE})"
+    fi
+    sleep 5
+  done
+
+  echo "Reading amaru-consumer seed tip..."
+  N0_DEADLINE=$((SECONDS + AMARU_CONSUMER_TIMEOUT))
+  N0_SLOT="unknown"
+  while true; do
+    CONSUMER_STATE="$(inspect_status amaru-consumer)"
+    if [ "$CONSUMER_STATE" != "running" ]; then
+      fail_amaru_consumer "amaru-consumer stopped before seed tip capture (state=${CONSUMER_STATE})"
+    fi
+    CONSUMER_RESTARTS_NOW="$(inspect_restart_count amaru-consumer)"
+    if [ "$CONSUMER_RESTARTS_NOW" != "$CONSUMER_RESTARTS" ]; then
+      fail_amaru_consumer "amaru-consumer restarted before seed tip capture (restarts ${CONSUMER_RESTARTS}->${CONSUMER_RESTARTS_NOW})"
+    fi
+    if N0_TIP="$(query_tip amaru-consumer 2>/dev/null)"; then
+      N0_SLOT="$(tip_slot "$N0_TIP")"
+      N0_HASH="$(tip_hash "$N0_TIP")"
+      if [[ "$N0_SLOT" =~ ^[0-9]+$ ]] && [ -n "$N0_HASH" ]; then
+        N0_SUMMARY="$(tip_summary "$N0_TIP")"
+        echo "OK: amaru-consumer seed tip ${N0_SUMMARY}"
+        break
+      fi
+    fi
+    if [ "$SECONDS" -ge "$N0_DEADLINE" ]; then
+      fail_amaru_consumer "could not read amaru-consumer seed tip within ${AMARU_CONSUMER_TIMEOUT}s"
+    fi
+    sleep 5
+  done
+
+  echo "Waiting for amaru-consumer to advance past seed and match p1 (timeout ${AMARU_CONSUMER_TIMEOUT}s)..."
+  CONVERGE_DEADLINE=$((SECONDS + AMARU_CONSUMER_TIMEOUT))
+  while true; do
+    CONSUMER_STATE="$(inspect_status amaru-consumer)"
+    if [ "$CONSUMER_STATE" != "running" ]; then
+      fail_amaru_consumer "amaru-consumer stopped during convergence (state=${CONSUMER_STATE})"
+    fi
+    CONSUMER_RESTARTS_NOW="$(inspect_restart_count amaru-consumer)"
+    if [ "$CONSUMER_RESTARTS_NOW" != "$CONSUMER_RESTARTS" ]; then
+      fail_amaru_consumer "amaru-consumer restarted during convergence (restarts ${CONSUMER_RESTARTS}->${CONSUMER_RESTARTS_NOW})"
+    fi
+    if P1_TIP="$(query_tip p1 2>/dev/null)" && CONSUMER_TIP="$(query_tip amaru-consumer 2>/dev/null)"; then
+      CONSUMER_SLOT="$(tip_slot "$CONSUMER_TIP")"
+      CONSUMER_HASH="$(tip_hash "$CONSUMER_TIP")"
+      P1_HASH="$(tip_hash "$P1_TIP")"
+      if [[ "$CONSUMER_SLOT" =~ ^[0-9]+$ ]] && [ -n "$CONSUMER_HASH" ] && [ -n "$P1_HASH" ]; then
+        if [ "$CONSUMER_SLOT" -gt "$N0_SLOT" ] && [ "$CONSUMER_HASH" = "$P1_HASH" ]; then
+          echo "OK: amaru-consumer converged via amaru — tip slot=${CONSUMER_SLOT} hash=${CONSUMER_HASH} matches p1"
+          break
+        fi
+      fi
+    fi
+    if [ "$SECONDS" -ge "$CONVERGE_DEADLINE" ]; then
+      fail_amaru_consumer "amaru-consumer did not advance past N0 and match p1 within ${AMARU_CONSUMER_TIMEOUT}s"
+    fi
+    sleep 5
+  done
+  echo "PASS: cardano_amaru bootstrap + relays + amaru-consumer convergence"
+  exit 0
+fi
+
 # Adversary probe: if the testnet has the adversary container, exec
 # its driver once to prove the binary runs, the chainpoints file is
 # reachable, and exit code is zero. Antithesis composer dispatches

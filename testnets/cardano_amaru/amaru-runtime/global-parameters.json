@@ -1,0 +1,12 @@
+{
+  "consensus_security_param": 5,
+  "epoch_length_scale_factor": 5,
+  "active_slot_coeff_inverse": 5,
+  "max_lovelace_supply": 45000000000000000,
+  "slots_per_kes_period": 129600,
+  "max_kes_evolution": 62,
+  "epoch_length": 125,
+  "stability_window": 75,
+  "randomness_stabilization_window": 100,
+  "system_start": 0
+}
