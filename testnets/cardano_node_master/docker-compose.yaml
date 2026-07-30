@@ -45,10 +45,12 @@ x-dingo-env: &dingo-env
   CARDANO_CONFIG: /configs/configs/config.json
   CARDANO_TOPOLOGY: /configs/configs/topology.json
   CARDANO_DATABASE_PATH: /data/db
-  DINGO_SOCKET_PATH: /ipc/dingo.socket
+  CARDANO_BIND_ADDR: 0.0.0.0
+  CARDANO_RELAY_PORT: "3001"
+  CARDANO_SOCKET_PATH: /ipc/dingo.socket
 
 x-dingo: &dingo
-  image: ghcr.io/blinklabs-io/dingo:0.58.0
+  image: ghcr.io/blinklabs-io/dingo:0.68.0
   command:
     - serve
     - --logging-level
@@ -61,6 +63,24 @@ x-dingo: &dingo
   depends_on:
     configurator:
       condition: service_completed_successfully
+  healthcheck:
+    test:
+      - CMD
+      - cardano-cli
+      - ping
+      - --magic
+      - "42"
+      - --host
+      - 127.0.0.1
+      - --port
+      - "3001"
+      - --tip
+      - --quiet
+      - -c1
+    interval: 10s
+    timeout: 5s
+    retries: 12
+    start_period: 30s
 
 services:
   configurator:

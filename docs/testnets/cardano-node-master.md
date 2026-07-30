@@ -6,8 +6,8 @@ A mixed-version Cardano testnet for Antithesis fault-injection testing.
 
 This testnet exercises the node-to-node protocol across multiple node versions and implementations:
 
-- **5 block producers**: p1 (cardano-node 10.5.3), p2 (cardano-node 10.6.2), p3 (cardano-node 10.7.1), p4 (cardano-node 11.0.1), p5 (Dingo 0.58.0) - forge blocks in a ring topology (p1 <-> p2 <-> p3 <-> p4 <-> p5)
-- **4 relay nodes**: relay1 (cardano-node 10.6.2), relay2 (cardano-node 10.7.1), relay3 (cardano-node 11.0.1), relay4 (Dingo 0.58.0) - non-producing nodes connected to all producers
+- **5 block producers**: p1 (cardano-node 10.5.3), p2 (cardano-node 10.6.2), p3 (cardano-node 10.7.1), p4 (cardano-node 11.0.1), p5 (Dingo 0.68.0) - forge blocks in a ring topology (p1 <-> p2 <-> p3 <-> p4 <-> p5)
+- **4 relay nodes**: relay1 (cardano-node 10.6.2), relay2 (cardano-node 10.7.1), relay3 (cardano-node 11.0.1), relay4 (Dingo 0.68.0) - non-producing nodes connected to all producers
 
 ### Supporting services
 
@@ -71,7 +71,7 @@ What this gives Antithesis to score:
   exercises ref-input handling, datum decoding, redeemer validation,
   exec-budget accounting.
 - **Multi-version interop**. Producers p1/p2/p3/p4 run four different
-  cardano-node versions, while p5 runs Dingo 0.58.0; the same Plutus tx
+  cardano-node versions, while p5 runs Dingo 0.68.0; the same Plutus tx
   must validate identically across implementations and versions or the
   cluster forks.
 - **Invariants that survive faults**. `asteria_admin_singleton`
@@ -181,12 +181,12 @@ Measured pressure in that run:
 p1 (cardano-node 10.5.3) <-> p2 (cardano-node 10.6.2) <-> p3 (cardano-node 10.7.1)
 ^                                                                            |
 |                                                                            v
-p5 (Dingo 0.58.0) <-> p4 (cardano-node 11.0.1) <-----------------------------+
+p5 (Dingo 0.68.0) <-> p4 (cardano-node 11.0.1) <-----------------------------+
 
 relay1 (cardano-node 10.6.2) ----+---- connected to all producers
 relay2 (cardano-node 10.7.1) ----+
 relay3 (cardano-node 11.0.1) ----+
-relay4 (Dingo 0.58.0) -----------+
+relay4 (Dingo 0.68.0) -----------+
 ```
 
 Producers form a ring. Relays connect to all producers.
@@ -201,6 +201,9 @@ cardano-node producers; Dingo does not forward logs to cardano-tracer.
 - `testnet.yaml`: Genesis parameters (poolCount, networkMagic 42, epoch length, protocol version)
 - `docker-compose.yaml`: Full topology definition with YAML anchors for producers and relays
 - `relay-topology.json`: Shared topology for relay nodes (connects to all producers)
+- Dingo's `p5` producer and `relay4` relay use the generated Cardano config and
+  keys, persist state under their own volumes, and expose a cardano-cli-compatible
+  readiness check on the node-to-node port.
 - `tracer-config.yaml`: cardano-tracer log forwarding configuration
 
 ## Running locally
