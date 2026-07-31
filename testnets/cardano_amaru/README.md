@@ -196,3 +196,77 @@ This stack intentionally targets cardano-node 10.7.1. The Amaru
 bootstrap CBOR projection is release-sensitive, so a green compile
 against a different ledger dependency set is not evidence that the
 runtime bytes are compatible with this cluster.
+
+## Image Entrypoint Contract
+
+### Historical image-identity answer
+
+The earlier local-versus-Antithesis discrepancy was an image identity
+discrepancy, not different command semantics. The failed fresh-local
+probe observed a Dockerfile-shaped `e01ad90` image with no entrypoint
+and `Cmd=["/usr/local/tracer-sidecar","/opt/cardano-tracer/logs"]`.
+The completed Antithesis run
+`5271f5ea22ddde7a6f674084905aa335-56-17` used consumer commit
+`95306662` and tracer-sidecar manifest digest
+`sha256:9c7fc575e32c0ca2789fa507632a7ba040b160c2bdeb4251f872e26390e3192a`.
+That exact registry manifest has `Entrypoint=["tracer-sidecar"]` and
+no `Cmd`; the run logged `starting tracer-sidecar...` and emitted two
+`cluster fork depth < k` counterexamples from
+`tracer-sidecar.example`. The mutable `e01ad90` tag named differently
+built or cached local and registry artifacts.
+
+### Released command
+
+```bash
+./scripts/check-compose-image-entrypoint.sh \
+  -f <compose-file> [-f <override> ...] \
+  --service <service> \
+  --expected-argv '<JSON string array>' \
+  [--image <repository>@sha256:<64-hex-digest>]
+```
+
+- Repeated `-f` is accepted; at least one is required.
+- `--service` and `--expected-argv` are required.
+- `--expected-argv` must be a JSON array of strings.
+- `--image`, when present, must be an exact lowercase
+  `repository@sha256:<64 hex>` reference. Sibling #208 supplies it to
+  bind a pre-launch digest set.
+- Omitting `--image` pulls and checks the image rendered by Compose.
+
+### Output contract
+
+On success, stdout contains exactly one canonical JSON line identified
+by `schema: "compose-image-entrypoint/v1"`. Human progress and
+diagnostics go to stderr. The stable field set is:
+
+| Field | Type | Description |
+|---|---|---|
+| `schema` | string | Always `compose-image-entrypoint/v1` |
+| `target_count` | number | Discovered service count (non-zero on success) |
+| `service` | string | The checked service name |
+| `declared_image` | string | Image from rendered Compose |
+| `checked_image` | string | Declared image or exact override |
+| `resolved_digest` | string | `repository@sha256:<digest>` from inspected metadata |
+| `image_id` | string | `sha256:<id>` of the pulled image |
+| `image_entrypoint` | array/null | Image `Entrypoint` |
+| `image_cmd` | array/null | Image `Cmd` |
+| `compose_entrypoint` | array/null | Rendered Compose `entrypoint` |
+| `compose_command` | array/null | Rendered Compose `command` |
+| `runtime_argv` | array | Actual container `Path` + `Args` |
+| `state` | string | Container state (`running` on success) |
+
+Zero targets, malformed or non-digest overrides, missing
+digest/metadata, argv mismatch, startup or early-exit, and incomplete
+cleanup are non-zero failures.
+
+### Release signal
+
+Exit zero is the release signal. Sibling #208 treats any non-zero exit
+as a launch-blocking interface alarm. Changing the command surface,
+field set, or field meaning requires a new ticket-owner ruling.
+
+The `cardano_amaru` smoke path
+(`scripts/smoke-test.sh cardano_amaru ...`) invokes the focused check
+before full stack startup, providing shared local and hosted
+reachability through the existing standalone and publish-images
+workflows.

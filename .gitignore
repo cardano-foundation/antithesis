@@ -28,3 +28,4 @@ docs/yarn.lock
 .llm/
 .llm/
 WIP.md
+/gate.sh
