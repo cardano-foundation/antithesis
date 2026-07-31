@@ -19,6 +19,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
+if [[ "$TESTNET" == cardano_amaru* ]]; then
+  echo "Running tracer-sidecar entrypoint contract check..."
+  scripts/check-compose-image-entrypoint.sh \
+    -f "$COMPOSE_FILE" \
+    --service tracer-sidecar \
+    --expected-argv '["tracer-sidecar","/opt/cardano-tracer/logs"]'
+fi
+
 echo "Starting testnet ${TESTNET}..."
 docker compose --progress quiet -f "$COMPOSE_FILE" up -d
 

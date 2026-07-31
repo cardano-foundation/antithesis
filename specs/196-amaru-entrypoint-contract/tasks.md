@@ -2,14 +2,14 @@
 
 ## Slice 1 — Live compose/image entrypoint contract
 
-- [ ] T1961 Implement the stable Compose/image entrypoint command with
+- [x] T1961 Implement the stable Compose/image entrypoint command with
   digest-aware image input, exact expected argv, zero-target rejection, and
   non-vacuous runtime evidence.
-- [ ] T1962 Prove the check against the real Docker boundary in both directions,
+- [x] T1962 Prove the check against the real Docker boundary in both directions,
   including successful container start and a seeded entrypoint mismatch.
-- [ ] T1963 Wire the focused command into the shared local/hosted
+- [x] T1963 Wire the focused command into the shared local/hosted
   `cardano_amaru` smoke path without changing unrelated testnet behavior.
-- [ ] T1964 Record the historical local-versus-Antithesis image identity answer
+- [x] T1964 Record the historical local-versus-Antithesis image identity answer
   and publish the command, input, output, and #208 release contract.
 
 ## Ticket-owner finalization evidence
