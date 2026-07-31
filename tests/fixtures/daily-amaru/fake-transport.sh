@@ -1,0 +1,196 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+scenario=${FAKE_SCENARIO:-changed}
+log_file=${FAKE_LOG:?FAKE_LOG is required}
+state_dir=${DAILY_AMARU_STATE_DIR:?DAILY_AMARU_STATE_DIR is required}
+receipt_file=${DAILY_AMARU_RECEIPT:?DAILY_AMARU_RECEIPT is required}
+
+upstream_sha=1111111111111111111111111111111111111111
+bootstrap_sha=2222222222222222222222222222222222222222
+consumer_sha=3333333333333333333333333333333333333333
+integrated_sha=4444444444444444444444444444444444444444
+image_ref="ghcr.io/lambdasistemi/amaru-bootstrap-producer:${bootstrap_sha}@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+mkdir -p "$state_dir"
+
+log() {
+  printf '%s' "$1" >>"$log_file"
+  shift
+  if [ "$#" -gt 0 ]; then
+    printf ' %s' "$@" >>"$log_file"
+  fi
+  printf '\n' >>"$log_file"
+}
+
+increment() {
+  local file=$1
+  local count=0
+  if [ -f "$file" ]; then
+    read -r count <"$file"
+  fi
+  printf '%s\n' "$((count + 1))" >"$file"
+}
+
+operation=${1:?transport operation is required}
+shift
+
+case "$operation" in
+  claim-day)
+    day=${1:?day is required}
+    log claim-day "$day"
+    if [ -e "$state_dir/day-claim" ]; then
+      printf 'day already claimed\n' >&2
+      exit 1
+    fi
+    printf '%s\n' "$day" >"$state_dir/day-claim"
+    ;;
+
+  resolve-upstream)
+    origin=${1:?origin is required}
+    ref=${2:?ref is required}
+    log resolve-upstream "$origin" "$ref"
+    case "$scenario" in
+      zero-observation) ;;
+      ambiguous-observation)
+        printf '%s|%s|%s\n' "$origin" "$ref" "$upstream_sha"
+        printf '%s|%s|%s\n' "$origin" "$ref" 9999999999999999999999999999999999999999
+        ;;
+      malformed-observation)
+        printf '%s|%s|not-a-full-sha\n' "$origin" "$ref"
+        ;;
+      wrong-origin-observation)
+        printf '%s|%s|%s\n' https://github.com/fork/amaru.git "$ref" "$upstream_sha"
+        ;;
+      wrong-ref-observation)
+        printf '%s|%s|%s\n' "$origin" refs/heads/develop "$upstream_sha"
+        ;;
+      *)
+        printf '%s|%s|%s\n' "$origin" "$ref" "$upstream_sha"
+        ;;
+    esac
+    ;;
+
+  last-success-sha)
+    log last-success-sha
+    if [ "$scenario" = unchanged ]; then
+      printf '%s\n' "$upstream_sha"
+    fi
+    ;;
+
+  claim-sha-attempt)
+    sha=${1:?upstream SHA is required}
+    log claim-sha-attempt "$sha"
+    if [ -e "$state_dir/attempted-sha" ]; then
+      printf 'SHA already attempted\n' >&2
+      exit 1
+    fi
+    printf '%s\n' "$sha" >"$state_dir/attempted-sha"
+    ;;
+
+  propose-bootstrap)
+    sha=${1:?upstream SHA is required}
+    identity=${2:?identity is required}
+    log mutation:bootstrap "$sha" "$identity"
+    if [ "$scenario" = failed-stage ]; then
+      printf 'bootstrap proposal failed\n' >&2
+      exit 1
+    fi
+    printf '%s\n' "$bootstrap_sha"
+    ;;
+
+  require-bootstrap-checks)
+    candidate=${1:?bootstrap candidate is required}
+    log require-bootstrap-checks "$candidate"
+    printf 'bootstrap-checks success head=%s\n' "$candidate"
+    ;;
+
+  resolve-image)
+    candidate=${1:?bootstrap candidate is required}
+    log mutation:image "$candidate"
+    printf '%s\n' "$image_ref"
+    ;;
+
+  prepare-consumer-repin)
+    image=${1:?image is required}
+    identity=${2:?identity is required}
+    log mutation:repin "$image" "$identity"
+    printf '%s\n' "$consumer_sha"
+    ;;
+
+  require-consumer-checks)
+    head=${1:?consumer head is required}
+    log require-consumer-checks "$head"
+    rows=(
+      "Build and push component images for cardano-node testnet|publish-images|$head|success"
+      "Build and push component images for cardano-node testnet|Compose smoke test|$head|success"
+      "tracer-sidecar CI|Build|$head|success"
+      "tracer-sidecar CI|Run unit Tests|$head|success"
+      "tracer-sidecar CI|Check code quality|$head|success"
+      "Build documentation|build-docs|$head|success"
+      "PR preview|preview|$head|success"
+    )
+    case "$scenario" in
+      missing-check) unset 'rows[6]' ;;
+      wrong-head-check)
+        rows[0]="Build and push component images for cardano-node testnet|publish-images|5555555555555555555555555555555555555555|success"
+        ;;
+      ambiguous-check)
+        rows+=("Build and push component images for cardano-node testnet|publish-images|$head|success")
+        ;;
+      pending-check)
+        rows[0]="Build and push component images for cardano-node testnet|publish-images|$head|pending"
+        ;;
+      failed-check)
+        rows[0]="Build and push component images for cardano-node testnet|publish-images|$head|failure"
+        ;;
+    esac
+    printf '%s\n' "${rows[@]}"
+    ;;
+
+  run-producer-check)
+    head=${1:?consumer head is required}
+    log run-producer-check "$head"
+    case "$scenario" in
+      '#202-failure')
+        printf '#202 command failed\n' >&2
+        exit 1
+        ;;
+      '#202-zero')
+        printf 'OK: 0 producer-image reference(s), all pinned to %s\n' "$image_ref"
+        ;;
+      *)
+        printf 'OK: 3 producer-image reference(s), all pinned to %s\n' "$image_ref"
+        ;;
+    esac
+    ;;
+
+  await-supervised-integration)
+    head=${1:?consumer head is required}
+    log await-supervised-integration "$head"
+    printf '%s\n' "$integrated_sha"
+    ;;
+
+  fake-launch)
+    log fake-launch "$@"
+    increment "$state_dir/fake-launch-count"
+    printf 'fake-request-%s\n' "$upstream_sha"
+    ;;
+
+  real-launch)
+    log real-launch "$@"
+    increment "$state_dir/real-launch-count"
+    printf 'unexpected-real-request\n'
+    ;;
+
+  receipt)
+    log receipt "$@"
+    : >"$receipt_file"
+    printf '%s\n' "$@" >>"$receipt_file"
+    ;;
+
+  *)
+    printf 'unknown transport operation: %s\n' "$operation" >&2
+    exit 64
+    ;;
+esac

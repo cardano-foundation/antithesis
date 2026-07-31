@@ -1,0 +1,50 @@
+name: Daily Amaru controller
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-amaru-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  daily-amaru-dry-run:
+    name: Daily Amaru contract dry run
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@v6
+      - name: Exercise the controller through the fake transport
+        run: tests/test-daily-amaru.sh
+
+  daily-amaru-scheduled:
+    name: Daily Amaru scheduled production
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      actions: write
+      contents: read
+      issues: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DAILY_AMARU_IDENTITY: ${{ secrets.DAILY_AMARU_CROSS_REPO_TOKEN }}
+      DAILY_AMARU_MODE: production
+    steps:
+      - name: Check out exact main
+        uses: actions/checkout@v6
+      - name: Run the once-daily state machine
+        run: |
+          set -euo pipefail
+          export DAILY_AMARU_DAY="$(date -u +%F)"
+          export DAILY_AMARU_STATE_DIR="$RUNNER_TEMP/daily-amaru"
+          export DAILY_AMARU_RECEIPT="$RUNNER_TEMP/daily-amaru/receipt"
+          scripts/daily-amaru.sh
