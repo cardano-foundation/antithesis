@@ -34,10 +34,16 @@ Subject to the parent ruling for the shared #208 contract, the command is:
 
 Repeated `-f` inputs support controlled Compose overlays. Omitting `--image`
 checks the freshly pulled rendered image; #208 supplies `--image` to bind its
-exact pre-launch digest set. Exit zero is the release signal. The success line
-is `compose-image-entrypoint/v1` evidence containing the target count, service,
-declared or overridden image, resolved digest, image `Entrypoint`/`Cmd`,
-Compose `entrypoint`/`command`, runtime argv, and running state.
+exact pre-launch digest set. Exit zero is the release signal. Success writes
+exactly one canonical JSON object to stdout; human progress and diagnostics go
+to stderr. The stable object shape is:
+
+```json
+{"schema":"compose-image-entrypoint/v1","target_count":1,"service":"tracer-sidecar","declared_image":"<compose image>","checked_image":"<declared or exact override>","resolved_digest":"<repository>@sha256:<digest>","image_id":"sha256:<id>","image_entrypoint":["tracer-sidecar"],"image_cmd":null,"compose_entrypoint":null,"compose_command":["/opt/cardano-tracer/logs"],"runtime_argv":["tracer-sidecar","/opt/cardano-tracer/logs"],"state":"running"}
+```
+
+#208 treats any non-zero exit as a launch-blocking interface alarm. Changing
+the command surface, field set, or field meaning requires a new parent ruling.
 
 ## Pre-falsification
 

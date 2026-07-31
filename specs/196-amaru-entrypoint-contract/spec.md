@@ -58,9 +58,13 @@ this ambiguity cannot recur silently.
   non-zero result with a mismatch diagnostic.
 - FR-008: Cleanup removes only resources created by the check's unique project
   and container identity, on both success and failure.
-- FR-009: A non-vacuous success line names schema version, target count,
-  service, declared or overridden image, resolved digest, image metadata,
-  rendered Compose metadata, runtime argv, and running state.
+- FR-009: Success writes exactly one canonical JSON object to stdout and human
+  diagnostics to stderr. The object has the stable fields `schema`,
+  `target_count`, `service`, `declared_image`, `checked_image`,
+  `resolved_digest`, `image_id`, `image_entrypoint`, `image_cmd`,
+  `compose_entrypoint`, `compose_command`, `runtime_argv`, and `state`.
+  `schema` is `compose-image-entrypoint/v1`, `target_count` is non-zero, and
+  every identity and metadata value is observed rather than inferred.
 - FR-010: `scripts/smoke-test.sh cardano_amaru ...` invokes the focused check
   before starting the full stack. This is the shared local/hosted reachability
   point used by the standalone and publish-images smoke workflows.
@@ -81,10 +85,10 @@ selected service and the observed mismatch when those facts are available.
 
 ## Observable success
 
-- The direct command exits zero and reports exactly one `tracer-sidecar`
-  target, its exact registry digest, the image and Compose command fields,
-  runtime `Path=tracer-sidecar`, runtime argument
-  `/opt/cardano-tracer/logs`, and `state=running`.
+- The direct command exits zero and its sole stdout line parses as the approved
+  `compose-image-entrypoint/v1` object for exactly one `tracer-sidecar` target,
+  its exact registry digest, the image and Compose command fields, runtime
+  argv `["tracer-sidecar","/opt/cardano-tracer/logs"]`, and `state=running`.
 - A known-missing service proves the discovery method can observe absence by
   exiting non-zero with `target_count=0`.
 - A seeded empty entrypoint makes Docker attempt the log directory as the
