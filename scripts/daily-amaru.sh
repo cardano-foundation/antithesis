@@ -42,6 +42,7 @@ receipt[upstream_ref]=$ref
 
 receipt_keys=(
   day stage outcome error
+  dependency_census
   upstream_origin upstream_ref upstream_sha
   bootstrap_candidate_sha image_ref
   consumer_candidate_sha check_evidence producer_count producer_evidence
@@ -50,11 +51,12 @@ receipt_keys=(
   launch_request moog_request run_outcome
 )
 
-write_receipt() {
+receipt_fields=()
+
+compose_receipt() {
   local stage=$1
   local outcome=$2
   local pair key value
-  local -a fields=()
   shift 2
 
   receipt[stage]=$stage
@@ -65,20 +67,55 @@ write_receipt() {
     value=${pair#*=}
     receipt["$key"]=$value
   done
+  receipt_fields=()
   for key in "${receipt_keys[@]}"; do
     if [[ -v "receipt[$key]" ]]; then
-      fields+=("$key=${receipt[$key]}")
+      receipt_fields+=("$key=${receipt[$key]}")
     fi
   done
-  transport_call receipt "${fields[@]}"
+}
+
+# The local receipt is refreshed before any external publication is requested,
+# so a transport whose own preconditions are broken cannot erase the only
+# record that the day produced a decision.
+persist_local_receipt() {
+  mkdir -p "$(dirname "$receipt_path")"
+  printf '%s\n' "${receipt_fields[@]}" >"$receipt_path"
+}
+
+write_receipt() {
+  compose_receipt "$@"
+  persist_local_receipt
+  transport_call receipt "${receipt_fields[@]}"
 }
 
 fail_stage() {
   local stage=$1
   local message=$2
-  write_receipt "$stage" FAILED "error=$message"
+  compose_receipt "$stage" FAILED "error=$message"
+  persist_local_receipt
+  if ! transport_call receipt "${receipt_fields[@]}"; then
+    printf 'daily-amaru: external receipt publication failed: %s\n' "$stage" >&2
+  fi
   die "$stage: $message"
 }
+
+# The scheduled runner contract is checked before the UTC day is claimed, so a
+# runner missing a required command costs neither the day nor a business effect.
+preflight_rc=0
+preflight_output=$(transport_call preflight) || preflight_rc=$?
+if [ "$preflight_rc" -ne 0 ]; then
+  missing_command=''
+  while read -r marker name _; do
+    [ "$marker" = MISSING-COMMAND ] || continue
+    missing_command=$name
+  done <<<"$preflight_output"
+  [ -n "$missing_command" ] || missing_command=unreported
+  fail_stage runner-preflight "missing-command-$missing_command"
+fi
+[[ "$preflight_output" =~ ^OK:\ [1-9][0-9]*\ scheduled\ dependencies\ present:\ .+$ ]] ||
+  fail_stage runner-preflight malformed-dependency-evidence
+receipt[dependency_census]=$preflight_output
 
 if ! transport_call claim-day "$day"; then
   fail_stage day-claim duplicate-day
@@ -128,6 +165,9 @@ if [ "$mode" = production ]; then
 else
   identity=dry-run
 fi
+# The bootstrap identity reaches the transport through the process environment
+# only; it is never placed on a command line where any process could read it.
+export DAILY_AMARU_IDENTITY=$identity
 
 if ! transport_call claim-sha-attempt "$observed_sha"; then
   fail_stage launch-attempt sha-already-attempted
@@ -135,7 +175,7 @@ fi
 write_receipt launch-attempt CLAIMED
 
 bootstrap_sha=''
-if ! bootstrap_sha=$(transport_call propose-bootstrap "$observed_sha" "$identity"); then
+if ! bootstrap_sha=$(transport_call propose-bootstrap "$observed_sha"); then
   fail_stage bootstrap-proposal proposal-failed
 fi
 [[ "$bootstrap_sha" =~ ^[0-9a-f]{40}$ ]] ||
@@ -158,7 +198,7 @@ receipt[image_ref]=$image_ref
 write_receipt image-resolution VERIFIED
 
 consumer_sha=''
-if ! consumer_sha=$(transport_call prepare-consumer-repin "$image_ref" "$identity"); then
+if ! consumer_sha=$(transport_call prepare-consumer-repin "$image_ref"); then
   fail_stage consumer-repin preparation-failed
 fi
 [[ "$consumer_sha" =~ ^[0-9a-f]{40}$ ]] ||

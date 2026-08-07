@@ -566,6 +566,9 @@ printf 'EFFECT-CENSUS controls=2 attempts=0 mutations=0 integrations=0 fake_laun
 pass broken-preconditions-no-business-effects
 
 # --- D213-02 dedicated bootstrap App interface -----------------------------
+# The `${{ ... }}` sequences below are GitHub Actions expressions matched as
+# literal workflow text; expanding them here would defeat the assertion.
+# shellcheck disable=SC2016
 for literal in \
   'uses: actions/create-github-app-token@v1' \
   'app-id: ${{ vars.DAILY_AMARU_APP_ID }}' \
@@ -595,8 +598,11 @@ identity_boundary_holds "$transport" ||
 mutant_root="$tmp_root/identity-mutants"
 mkdir -p "$mutant_root"
 
+# The injected text is transport source read back verbatim, not an expansion.
+# shellcheck disable=SC2016
 sed 's#^  receipt)$#  receipt)\n    leak="$bootstrap_identity"#' "$transport" \
   >"$mutant_root/leaked.sh"
+# shellcheck disable=SC2016
 grep -Fq 'leak="$bootstrap_identity"' "$mutant_root/leaked.sh" ||
   fail 'identity-leak mutation did not apply'
 if identity_boundary_holds "$mutant_root/leaked.sh"; then
@@ -621,7 +627,11 @@ for forbidden in DAILY_AMARU_CROSS_REPO_TOKEN MOOG_GITHUB_PAT GITHUB_ENV; do
     fail "forbidden credential path remains: $forbidden"
   fi
 done
+# Literal workflow expressions again: the minted token must be bound exactly
+# once, and must appear nowhere else in the workflow.
+# shellcheck disable=SC2016
 assert_workflow_literal_once 'DAILY_AMARU_IDENTITY: ${{ steps.app-token.outputs.token }}'
+# shellcheck disable=SC2016
 assert_workflow_literal_once '${{ steps.app-token.outputs.token }}'
 
 secret_value=t213-bootstrap-secret-token-value

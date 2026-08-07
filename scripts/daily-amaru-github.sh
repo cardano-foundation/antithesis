@@ -6,6 +6,20 @@ receipt_issue=${DAILY_AMARU_RECEIPT_ISSUE:-210}
 state_dir=${DAILY_AMARU_STATE_DIR:?DAILY_AMARU_STATE_DIR is required}
 bootstrap_repository=${DAILY_AMARU_BOOTSTRAP_REPOSITORY:-lambdasistemi/amaru-bootstrap}
 producer_image=ghcr.io/lambdasistemi/amaru-bootstrap-producer
+
+# The bootstrap App token authorizes lambdasistemi/amaru-bootstrap only. Every
+# same-repository operation uses the workflow's own short-lived repository
+# token instead; the two values are never interchangeable.
+bootstrap_identity=${DAILY_AMARU_IDENTITY:-}
+repository_identity=${GH_TOKEN:-}
+
+# Every non-shell command a reachable production operation needs. The scheduled
+# runner provisions this set and `preflight` reports the first absent member by
+# name, so a missing dependency becomes a controller precondition failure long
+# before any business effect.
+scheduled_command_census=(
+  gh git jq rg sed awk grep tail tr head seq sleep date docker nix
+)
 consumer_required_checks=(
   'Build and push component images for cardano-node testnet|publish-images'
   'Build and push component images for cardano-node testnet|Compose smoke test'
@@ -25,9 +39,15 @@ need_command() {
   command -v "$1" >/dev/null 2>&1 || die "missing command: $1"
 }
 
-for command in gh git jq rg sed; do
-  need_command "$command"
-done
+# Each operation declares the commands it actually reaches for, so publishing a
+# failure receipt never depends on the command whose absence it reports.
+require_commands() {
+  local command
+  for command in "$@"; do
+    need_command "$command"
+  done
+}
+
 mkdir -p "$state_dir"
 
 issue_bodies() {
@@ -42,7 +62,7 @@ comment_issue() {
 with_identity() {
   local identity=$1
   shift
-  [ -n "$identity" ] || die 'cross-repository identity is empty'
+  [ -n "$identity" ] || die 'identity is empty'
   GH_TOKEN=$identity "$@"
 }
 
@@ -95,7 +115,25 @@ operation=${1:?transport operation is required}
 shift
 
 case "$operation" in
+  preflight)
+    requirements=()
+    if [ "$#" -gt 0 ]; then
+      requirements=("$@")
+    else
+      requirements=("${scheduled_command_census[@]}")
+    fi
+    for command in "${requirements[@]}"; do
+      if ! command -v "$command" >/dev/null 2>&1; then
+        printf 'MISSING-COMMAND %s\n' "$command"
+        die "missing command: $command"
+      fi
+    done
+    printf 'OK: %s scheduled dependencies present: %s\n' \
+      "${#requirements[@]}" "${requirements[*]}"
+    ;;
+
   claim-day)
+    require_commands gh grep
     day=${1:?day is required}
     marker="<!-- daily-amaru day=$day claim -->"
     if issue_bodies | grep -Fqx -- "$marker"; then
@@ -105,6 +143,7 @@ case "$operation" in
     ;;
 
   resolve-upstream)
+    require_commands git
     origin=${1:?origin is required}
     ref=${2:?ref is required}
     git ls-remote --heads "$origin" "$ref" |
@@ -114,12 +153,14 @@ case "$operation" in
     ;;
 
   last-success-sha)
+    require_commands gh sed tail
     issue_bodies |
       sed -nE 's/^<!-- daily-amaru last-success sha=([0-9a-f]{40}) -->$/\1/p' |
       tail -n 1
     ;;
 
   claim-sha-attempt)
+    require_commands gh grep
     sha=${1:?upstream SHA is required}
     marker="<!-- daily-amaru attempted-sha=$sha -->"
     if issue_bodies | grep -Fqx -- "$marker"; then
@@ -129,14 +170,14 @@ case "$operation" in
     ;;
 
   propose-bootstrap)
+    require_commands gh git jq nix
     upstream_sha=${1:?upstream SHA is required}
-    identity=${2:?identity is required}
     day=${DAILY_AMARU_DAY:?DAILY_AMARU_DAY is required}
     directory=$state_dir/bootstrap
     branch="daily-amaru/bootstrap-$day-${upstream_sha:0:12}"
 
     [ ! -e "$directory" ] || die "bootstrap workspace already exists: $directory"
-    with_identity "$identity" gh repo clone "$bootstrap_repository" "$directory" -- --filter=blob:none
+    with_identity "$bootstrap_identity" gh repo clone "$bootstrap_repository" "$directory" -- --filter=blob:none
     git -C "$directory" checkout -b "$branch" origin/main
 
     # TODO(amaru-bootstrap#75): replace this crude stock-pin proposal with
@@ -172,20 +213,20 @@ case "$operation" in
     git -C "$directory" -c user.name='daily-amaru' \
       -c user.email='daily-amaru@users.noreply.github.com' \
       commit -m "chore: bump stock Amaru to $upstream_sha"
-    push_branch "$directory" "$branch" "$identity"
+    push_branch "$directory" "$branch" "$bootstrap_identity"
     pr_url=$(create_or_find_pr "$bootstrap_repository" "$branch" \
       "chore: bump stock Amaru to ${upstream_sha:0:12}" \
       "Daily Amaru controller proposal for exact upstream $upstream_sha." \
-      "$identity")
+      "$bootstrap_identity")
     printf '%s\n' "$pr_url" >"$state_dir/bootstrap-pr"
     git -C "$directory" rev-parse HEAD
     ;;
 
   require-bootstrap-checks)
+    require_commands gh jq awk
     candidate=${1:?bootstrap candidate is required}
-    identity=${DAILY_AMARU_IDENTITY:?DAILY_AMARU_IDENTITY is required}
     checks=${DAILY_AMARU_BOOTSTRAP_CHECKS:-Build,Run unit Tests,Check code quality,publish-images}
-    rows=$(collect_action_rows "$bootstrap_repository" "$candidate" "$identity")
+    rows=$(collect_action_rows "$bootstrap_repository" "$candidate" "$bootstrap_identity")
     IFS=',' read -r -a required <<<"$checks"
     for name in "${required[@]}"; do
       count=$(awk -F'|' -v n="$name" -v h="$candidate" \
@@ -197,6 +238,7 @@ case "$operation" in
     ;;
 
   resolve-image)
+    require_commands docker tr
     candidate=${1:?bootstrap candidate is required}
     image_tag="$producer_image:$candidate"
     digest=$(docker buildx imagetools inspect "$image_tag" \
@@ -206,14 +248,14 @@ case "$operation" in
     ;;
 
   prepare-consumer-repin)
+    require_commands gh git rg sed
     image_ref=${1:?image reference is required}
-    identity=${2:?identity is required}
     day=${DAILY_AMARU_DAY:?DAILY_AMARU_DAY is required}
     directory=$state_dir/consumer
     branch="daily-amaru/consumer-$day"
 
     [ ! -e "$directory" ] || die "consumer workspace already exists: $directory"
-    with_identity "$identity" gh repo clone "$repository" "$directory" -- --filter=blob:none
+    with_identity "$repository_identity" gh repo clone "$repository" "$directory" -- --filter=blob:none
     git -C "$directory" checkout -b "$branch" origin/main
     mapfile -t producer_files < <(
       rg -l "image:.*$producer_image" "$directory/testnets" -g '*.yaml' -g '*.yml'
@@ -233,21 +275,21 @@ case "$operation" in
     git -C "$directory" -c user.name='daily-amaru' \
       -c user.email='daily-amaru@users.noreply.github.com' \
       commit -m "chore: repin Amaru producer to exact digest"
-    push_branch "$directory" "$branch" "$identity"
+    push_branch "$directory" "$branch" "$repository_identity"
     pr_url=$(create_or_find_pr "$repository" "$branch" \
       'chore: repin Amaru producer to exact digest' \
       "Daily Amaru controller repin to $image_ref. Integration is lane-supervised." \
-      "$identity")
+      "$repository_identity")
     printf '%s\n' "$pr_url" >"$state_dir/consumer-pr"
     git -C "$directory" rev-parse HEAD
     ;;
 
   require-consumer-checks)
+    require_commands gh jq awk
     candidate=${1:?consumer candidate is required}
-    identity=${DAILY_AMARU_IDENTITY:?DAILY_AMARU_IDENTITY is required}
     # TODO(cardano-node-antithesis#208): replace this explicit current-head
     # census with the complete exact-revision interface preflight.
-    rows=$(collect_action_rows "$repository" "$candidate" "$identity")
+    rows=$(collect_action_rows "$repository" "$candidate" "$repository_identity")
     for required in "${consumer_required_checks[@]}"; do
       workflow=${required%%|*}
       name=${required#*|}
@@ -261,6 +303,7 @@ case "$operation" in
     ;;
 
   run-producer-check)
+    require_commands git
     candidate=${1:?consumer candidate is required}
     directory=$state_dir/consumer
     [ "$(git -C "$directory" rev-parse HEAD)" = "$candidate" ] ||
@@ -272,12 +315,12 @@ case "$operation" in
     ;;
 
   await-supervised-integration)
+    require_commands gh jq
     candidate=${1:?consumer candidate is required}
-    identity=${DAILY_AMARU_IDENTITY:?DAILY_AMARU_IDENTITY is required}
     # TODO(cardano-node-antithesis#207): replace lane-supervised integration
     # and launch correlation after the guarded unattended platform exists.
     read -r pr_url <"$state_dir/consumer-pr"
-    pr_json=$(with_identity "$identity" gh pr view "$pr_url" -R "$repository" \
+    pr_json=$(with_identity "$repository_identity" gh pr view "$pr_url" -R "$repository" \
       --json state,headRefOid,mergeCommit)
     state=$(jq -r .state <<<"$pr_json")
     head=$(jq -r .headRefOid <<<"$pr_json")
@@ -285,7 +328,7 @@ case "$operation" in
     [ "$state" = MERGED ] || die 'consumer repin is awaiting guarded integration'
     [ "$head" = "$candidate" ] || die 'integrated PR head differs from the verified candidate'
     [[ "$merged" =~ ^[0-9a-f]{40}$ ]] || die 'missing merge commit SHA'
-    main_head=$(with_identity "$identity" gh api "repos/$repository/git/ref/heads/main" \
+    main_head=$(with_identity "$repository_identity" gh api "repos/$repository/git/ref/heads/main" \
       --jq .object.sha)
     [ "$main_head" = "$merged" ] || die 'merged consumer commit is not exact current main'
     printf '%s\n' "$merged"
@@ -302,24 +345,24 @@ case "$operation" in
     ;;
 
   real-launch)
+    require_commands gh date seq sleep head
     workflow=${1:?workflow is required}
     testnet=${2:?testnet is required}
     duration=${3:?duration is required}
     no_faults=${4:?fault setting is required}
     integrated=${5:?integrated SHA is required}
-    identity=${DAILY_AMARU_IDENTITY:?DAILY_AMARU_IDENTITY is required}
     [ "$workflow" = cardano-node.yaml ] && [ "$testnet" = cardano_amaru ] &&
       [ "$duration" = duration=1 ] && [ "$no_faults" = no-faults=false ] ||
       die 'real launch shape differs from the frozen contract'
-    main_head=$(with_identity "$identity" gh api "repos/$repository/git/ref/heads/main" \
+    main_head=$(with_identity "$repository_identity" gh api "repos/$repository/git/ref/heads/main" \
       --jq .object.sha)
     [ "$main_head" = "$integrated" ] || die 'real launch target is not exact main'
     started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    with_identity "$identity" gh workflow run cardano-node.yaml -R "$repository" \
+    with_identity "$repository_identity" gh workflow run cardano-node.yaml -R "$repository" \
       --ref "$integrated" -f test=cardano_amaru -f duration=1 -f no-faults=false
     run_id=''
     for _ in $(seq 1 30); do
-      run_id=$(with_identity "$identity" gh run list -R "$repository" \
+      run_id=$(with_identity "$repository_identity" gh run list -R "$repository" \
         --workflow cardano-node.yaml --commit "$integrated" --event workflow_dispatch \
         --limit 10 --json databaseId,createdAt \
         --jq ".[] | select(.createdAt >= \"$started\") | .databaseId" | head -n 1)
@@ -327,11 +370,14 @@ case "$operation" in
       sleep 2
     done
     [ -n "$run_id" ] || die 'launched workflow run was not observable'
-    with_identity "$identity" gh run watch "$run_id" -R "$repository" --exit-status
+    with_identity "$repository_identity" gh run watch "$run_id" -R "$repository" --exit-status
     printf 'https://github.com/%s/actions/runs/%s\n' "$repository" "$run_id"
     ;;
 
   receipt)
+    # Minimum dependency surface on purpose: external publication of a failure
+    # receipt must not require the command whose absence it is reporting.
+    require_commands gh
     # TODO(cardano-node-antithesis#206): replace issue-comment receipts with
     # complete per-property accounting and an independent missing-day alarm.
     body='<!-- daily-amaru receipt -->'

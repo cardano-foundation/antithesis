@@ -36,15 +36,54 @@ jobs:
       pull-requests: write
     env:
       GH_TOKEN: ${{ github.token }}
-      DAILY_AMARU_IDENTITY: ${{ secrets.DAILY_AMARU_CROSS_REPO_TOKEN }}
       DAILY_AMARU_MODE: production
+      DAILY_AMARU_STATE_DIR: ${{ runner.temp }}/daily-amaru
+      DAILY_AMARU_RECEIPT: ${{ runner.temp }}/daily-amaru/receipt
     steps:
       - name: Check out exact main
         uses: actions/checkout@v6
+
+      # The stock runner carries neither ripgrep nor nix; the controller's own
+      # dependency preflight fails loudly if this provisioning ever regresses.
+      - name: Provision the scheduled dependency census
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ripgrep
+      - uses: paolino/dev-assets/setup-nix@v0.0.1
+        with:
+          cachix-auth-token: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+
+      # An absent variable, an absent secret, or an unsuccessful mint must still
+      # reach the controller with an empty bootstrap identity, so the failure is
+      # a stage of the state machine rather than a skipped setup step.
+      - name: Mint the dedicated bootstrap App identity
+        id: app-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.DAILY_AMARU_APP_ID }}
+          private-key: ${{ secrets.DAILY_AMARU_APP_PRIVATE_KEY }}
+          owner: lambdasistemi
+          repositories: amaru-bootstrap
+          permission-actions: read
+          permission-checks: read
+          permission-contents: write
+          permission-pull-requests: write
+          permission-metadata: read
+
       - name: Run the once-daily state machine
+        env:
+          DAILY_AMARU_IDENTITY: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
           export DAILY_AMARU_DAY="$(date -u +%F)"
-          export DAILY_AMARU_STATE_DIR="$RUNNER_TEMP/daily-amaru"
-          export DAILY_AMARU_RECEIPT="$RUNNER_TEMP/daily-amaru/receipt"
           scripts/daily-amaru.sh
+
+      - name: Publish the local decision receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: daily-amaru-receipt-${{ github.run_id }}
+          path: ${{ runner.temp }}/daily-amaru/receipt
+          if-no-files-found: warn
