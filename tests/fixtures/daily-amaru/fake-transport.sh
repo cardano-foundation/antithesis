@@ -32,10 +32,38 @@ increment() {
   printf '%s\n' "$((count + 1))" >"$file"
 }
 
+identity_marker() {
+  if [ -n "${DAILY_AMARU_IDENTITY:-}" ]; then
+    printf 'identity-present'
+  else
+    printf 'identity-absent'
+  fi
+}
+
 operation=${1:?transport operation is required}
 shift
 
 case "$operation" in
+  preflight)
+    log preflight "$@"
+    case "$scenario" in
+      missing-tool)
+        printf 'MISSING-COMMAND rg\n'
+        printf 'daily-amaru-github: missing command: rg\n' >&2
+        exit 1
+        ;;
+      silent-preflight)
+        ;;
+      malformed-preflight)
+        printf 'dependencies look fine\n'
+        ;;
+      *)
+        printf 'OK: 15 scheduled dependencies present: %s\n' \
+          'gh git jq rg sed awk grep tail tr head seq sleep date docker nix'
+        ;;
+    esac
+    ;;
+
   claim-day)
     day=${1:?day is required}
     log claim-day "$day"
@@ -90,8 +118,9 @@ case "$operation" in
 
   propose-bootstrap)
     sha=${1:?upstream SHA is required}
-    identity=${2:?identity is required}
-    log mutation:bootstrap "$sha" "$identity"
+    # The minted bootstrap identity travels in the process environment only, so
+    # the log records its presence and never its value.
+    log mutation:bootstrap "$sha" "$(identity_marker)"
     if [ "$scenario" = failed-stage ]; then
       printf 'bootstrap proposal failed\n' >&2
       exit 1
@@ -113,8 +142,7 @@ case "$operation" in
 
   prepare-consumer-repin)
     image=${1:?image is required}
-    identity=${2:?identity is required}
-    log mutation:repin "$image" "$identity"
+    log mutation:repin "$image"
     printf '%s\n' "$consumer_sha"
     ;;
 
