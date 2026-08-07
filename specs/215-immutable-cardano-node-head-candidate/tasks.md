@@ -69,3 +69,7 @@ audited and accepted by the ticket owner.
       walls their own negative controls (a seeded outbound connection and a
       seeded write outside scratch must each fail the run). Remove the
       syscall-observation apparatus it replaces.
+- [ ] T2160 Construct the containment filesystem view from explicit binds
+      instead of `--ro-bind / /` plus masking, so no pre-existing rendezvous
+      object is reachable by name, and add a name-bound negative control whose
+      endpoint exists before entry.

@@ -142,3 +142,28 @@ The invariant is therefore proved by **containment**:
 Syscall-level observation is no longer required for this invariant and its
 apparatus should be removed rather than kept alongside. It cost roughly 285
 seconds per gate run while proving less than the walls do.
+
+### The wall is constructed, not subtracted (mandate v3.1)
+
+Three consecutive audits breached containment through a channel the wall did not
+remove, because the wall was built by **subtracting** capabilities from a full
+view of the host: fresh sockets denied, then inherited descriptors severed, then
+namespaces unshared — while `--ro-bind / /` still exposed every pre-existing
+rendezvous object in the filesystem. A read-only bind is not a containment
+primitive for non-regular inodes: it returns `EROFS` for writes to regular
+files, directories and symlinks, but leaves `connect()` on a pathname `AF_UNIX`
+socket and `open(O_WRONLY)` on a FIFO permitted.
+
+Subtraction has the same defect as enumeration one level down: it requires
+knowing every capability to remove.
+
+The wall is therefore **constructed**: the region starts from an empty
+filesystem view and receives only explicit binds of what the suite genuinely
+needs — the repository read-only, the scratch root writable, and the minimum
+runtime paths. Nothing else is visible, so no pre-existing endpoint of any kind
+is reachable by name, whether or not anyone anticipated it.
+
+The negative-control set must include at least one seed whose endpoint exists
+**before** entry but whose descriptor is acquired **inside by name**. Every
+descriptor-bound control is blind to that family by construction, which is
+exactly why three well-built control sets missed it.
