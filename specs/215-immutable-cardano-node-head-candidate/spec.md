@@ -44,7 +44,7 @@ invariants `E214-01..05` map as noted; `E214-06..09` belong to #216.
 | I215-04 | Every rendered producer/relay uses one identical immutable candidate (E214-04) | any expected node service missing, any node image unequal to the candidate, any stale release reference surviving, or a zero-row census | stage `verify-topology` records the complete expected service census with one distinct image equal to the candidate |
 | I215-05 | The rendered model is Compose-valid | Compose validation of the rendered model fails or produces no services | stage `validate-compose` succeeds on the rendered model |
 | I215-06 | No failed or ambiguous prerequisite reaches the submission boundary (E214-05) | the submission operation is invoked after any stage failure | the submission operation is invoked exactly once on the complete path and zero times in every negative control |
-| I215-07 | No real Antithesis submission exists in this ticket | any real-submission transport operation exists, or the candidate path can reach anything outside its declared scratch | the transport operation surface equals the frozen model exactly, and the whole suite runs to green inside a container that makes external reach impossible |
+| I215-07 | No real Antithesis submission exists in this ticket | any real-submission transport operation exists, or the candidate path can reach anything outside its declared scratch | the transport operation surface equals the frozen model exactly, and the whole suite runs to green inside a container that grants the region no name for anything outside stdio and its scratch bind |
 | I215-08 | One production code path | preparation or validation logic is duplicated per mode | the same controller runs in every mode and only the injected transport differs |
 | I215-09 | Receipts are honest | a failing run emits a success outcome or omits its failing stage | each stage appends a `CandidateReceiptV1` record; a failure records `outcome=FAILED` with the failing stage and an error reason |
 | I215-10 | Secrets never leak | any credential value appears in a receipt, log, fixture, brief, or document | credentials are passed only through the process environment of the effecting command |
@@ -127,9 +127,12 @@ The invariant is therefore proved by **containment**:
 - The complete suite runs inside an OS-enforced container with **no network
   access** and **no writable path outside its declared scratch root**; the
   repository tree is read-only to it.
-- Green inside that container is the proof. An escape is not detected — it is
-  **impossible**, so no enumeration is required and no future channel can defeat
-  it.
+- Green inside that container is the proof: the region has no name for anything
+  it was not explicitly granted, so no enumeration is required and no future
+  channel can defeat it. State the claim exactly — the region retains stdio and
+  one writable scratch bind, both licensed here, so this is "no reach beyond
+  what the wall grants", not "no bytes leave". Four campaigns were lost to a
+  claim broader than its mechanism; do not restate one.
 - The container is a **negative control of its own**: a seeded outbound
   connection and a seeded write outside scratch must each make the run fail,
   demonstrating the walls are real rather than assumed.
