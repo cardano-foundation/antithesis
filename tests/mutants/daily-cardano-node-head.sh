@@ -7,9 +7,10 @@ controller_rel=scripts/daily-cardano-node-head.sh
 fake_rel=tests/fixtures/daily-cardano-node-head/fake-transport.sh
 suite_rel=tests/test-daily-cardano-node-head.sh
 harness_rel=tests/mutants/daily-cardano-node-head.sh
+contain_rel=tests/contain/run-suite.sh
 functions_model_rel=specs/215-immutable-cardano-node-head-candidate/functions-model.md
 data_model_rel=specs/215-immutable-cardano-node-head-candidate/data-model.md
-owned=("$controller_rel" "$fake_rel" "$suite_rel" "$harness_rel")
+owned=("$controller_rel" "$fake_rel" "$suite_rel" "$harness_rel" "$contain_rel")
 
 die() {
   printf 'MUTATION-HARNESS-FAIL: %s\n' "$*" >&2
@@ -44,6 +45,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
+[ -x "$repo_root/$contain_rel" ] ||
+  die "missing containment entrypoint: $contain_rel"
+
 source_fingerprint=$(fingerprint_owned)
 baseline_log="$scratch_root/baseline.log"
 if ! "$repo_root/$suite_rel" >"$baseline_log" 2>&1; then
@@ -57,10 +61,12 @@ materialize() {
   mkdir -p \
     "$case_root/scripts" \
     "$case_root/tests/fixtures/daily-cardano-node-head" \
+    "$case_root/tests/contain" \
     "$case_root/specs/215-immutable-cardano-node-head-candidate"
   cp -p "$repo_root/$controller_rel" "$case_root/$controller_rel"
   cp -p "$repo_root/$fake_rel" "$case_root/$fake_rel"
   cp -p "$repo_root/$suite_rel" "$case_root/$suite_rel"
+  cp -p "$repo_root/$contain_rel" "$case_root/$contain_rel"
   cp -p "$repo_root/$functions_model_rel" "$case_root/$functions_model_rel"
   cp -p "$repo_root/$data_model_rel" "$case_root/$data_model_rel"
 }
@@ -110,23 +116,6 @@ insert_before_once() {
     die "inserted mutation count=$count, expected=1: $inserted"
   after=$(sha256sum "$file")
   [ "$before" != "$after" ] || die "insertion did not change $file"
-}
-
-seed_hidden_client() {
-  cat >"$case_root/hidden-client" <<EOF
-#!/bin/sh
-printf 'executed pid=%s ppid=%s argv=%s\n' "\$\$" "\$PPID" "\$*" >>"$case_root/hidden-effect"
-EOF
-  chmod +x "$case_root/hidden-client"
-}
-
-seed_path_hidden_client() {
-  mkdir -p "$case_root/bin"
-  cat >"$case_root/bin/arbitrary-submit" <<EOF
-#!/bin/sh
-printf 'executed pid=%s ppid=%s argv=%s\n' "\$\$" "\$PPID" "\$*" >>"$case_root/hidden-effect"
-EOF
-  chmod +x "$case_root/bin/arbitrary-submit"
 }
 
 start_network_listener() {
@@ -208,41 +197,17 @@ apply_mutant() {
         "submit_output=''" \
         'transport_call fake-submit "$rendered_model" "$candidate_ref" "$observed_sha" >/dev/null'
       ;;
-    I215-07-hidden-submission-client)
-      seed_path_hidden_client
-      insert_before_once "$fake" \
-        '    log fake-submit "$rendered_model" "$candidate_ref" "$sha"' \
-        '    arbitrary-submit "$rendered_model" "$candidate_ref" "$sha"'
-      ;;
-    I215-07-hidden-absolute-client)
-      seed_hidden_client
-      insert_before_once "$fake" \
-        '    log fake-submit "$rendered_model" "$candidate_ref" "$sha"' \
-        "    $case_root/hidden-client \"\$rendered_model\" \"\$candidate_ref\" \"\$sha\""
-      ;;
-    I215-07-hidden-var-suffix-client)
-      seed_hidden_client
-      insert_before_once "$fake" \
-        '    log fake-submit "$rendered_model" "$candidate_ref" "$sha"' \
-        '    hidden_dir='"$case_root"'; "$hidden_dir/hidden-client" "$rendered_model" "$candidate_ref" "$sha" || true'
-      ;;
-    I215-07-hidden-sibling-client)
-      seed_hidden_client
-      insert_before_once "$fake" \
-        '    log fake-submit "$rendered_model" "$candidate_ref" "$sha"' \
-        '    "$(dirname "${BASH_SOURCE[0]}")/../../../hidden-client" "$rendered_model" "$candidate_ref" "$sha" || true'
-      ;;
-    I215-07-hidden-substitution-client)
-      seed_hidden_client
-      insert_before_once "$fake" \
-        '    log fake-submit "$rendered_model" "$candidate_ref" "$sha"' \
-        '    hidden_result=$('"$case_root"'/hidden-client "$rendered_model" "$candidate_ref" "$sha" || true)'
-      ;;
-    I215-07-hidden-network-egress)
+    I215-07-wall-network-egress)
       start_network_listener
       insert_before_once "$fake" \
         '    log fake-submit "$rendered_model" "$candidate_ref" "$sha"' \
-        "    { exec 9<>/dev/tcp/127.0.0.1/$network_port; printf 'REAL-SUBMIT:%s:%s' \"\$candidate_ref\" \"\$sha\" >&9; exec 9>&-; } || true"
+        "    exec 9<>/dev/tcp/127.0.0.1/$network_port; printf 'REAL-SUBMIT:%s:%s' \"\$candidate_ref\" \"\$sha\" >&9; exec 9>&-"
+      ;;
+    I215-07-wall-filesystem-egress)
+      : >"$case_root/filesystem-effect"
+      insert_before_once "$fake" \
+        '    log fake-submit "$rendered_model" "$candidate_ref" "$sha"' \
+        "    printf 'REAL-SUBMIT:%s:%s' \"\$candidate_ref\" \"\$sha\" >>\"$case_root/filesystem-effect\""
       ;;
     I215-08-manual-specific-validation-target)
       insert_before_once "$controller" \
@@ -333,12 +298,8 @@ mutants=(
   I215-04-remove-node-image-equality
   I215-05-validate-wrong-model
   I215-06-duplicate-submit
-  I215-07-hidden-submission-client
-  I215-07-hidden-absolute-client
-  I215-07-hidden-var-suffix-client
-  I215-07-hidden-sibling-client
-  I215-07-hidden-substitution-client
-  I215-07-hidden-network-egress
+  I215-07-wall-network-egress
+  I215-07-wall-filesystem-egress
   I215-08-manual-specific-validation-target
   I215-09-later-field-on-compose-failure
   D05-drop-mode-field
@@ -419,12 +380,25 @@ for mutant in "${mutants[@]}"; do
     "$case_root/$suite_rel" || die "$mutant produced invalid shell"
   suite_rc=0
   case "$mutant" in
-    I215-07-hidden-submission-client)
-      PATH="$case_root/bin:$PATH" \
-        "$case_root/$suite_rel" >"$case_root/suite.log" 2>&1 || suite_rc=$?
-      ;;
-    I215-07-*)
-      "$case_root/$suite_rel" >"$case_root/suite.log" 2>&1 || suite_rc=$?
+    I215-07-wall-network-egress | I215-07-wall-filesystem-egress)
+      control_rc=0
+      HEAD_CANDIDATE_EXECVE_INNER=1 \
+        "$case_root/$suite_rel" >"$case_root/control.log" 2>&1 || control_rc=$?
+      [ "$control_rc" -eq 0 ] ||
+        die "$mutant seed failed without containment"
+      case "$mutant" in
+        I215-07-wall-network-egress) effect_file="$case_root/network-effect" ;;
+        *) effect_file="$case_root/filesystem-effect" ;;
+      esac
+      [ -s "$effect_file" ] ||
+        die "$mutant did not execute its uncontained negative control"
+      : >"$effect_file"
+      "$case_root/$contain_rel" >"$case_root/suite.log" 2>&1 || suite_rc=$?
+      if [ -s "$effect_file" ]; then
+        suite_rc=0
+      elif [ "$suite_rc" -ne 0 ]; then
+        printf 'WALL-CONTROL %s seed=proved containment=blocked\n' "$mutant"
+      fi
       ;;
     *)
       HEAD_CANDIDATE_EXECVE_INNER=1 \
@@ -438,20 +412,6 @@ for mutant in "${mutants[@]}"; do
     caught=$((caught + 1))
     printf '%s caught\n' "$mutant"
   fi
-  case "$mutant" in
-    I215-07-hidden-submission-client | \
-      I215-07-hidden-absolute-client | \
-      I215-07-hidden-var-suffix-client | \
-      I215-07-hidden-sibling-client | \
-      I215-07-hidden-substitution-client)
-      [ -s "$case_root/hidden-effect" ] ||
-        die "$mutant did not execute its process-creation negative control"
-      ;;
-    I215-07-hidden-network-egress)
-      [ -s "$case_root/network-effect" ] ||
-        die "$mutant did not execute its network-egress negative control"
-      ;;
-  esac
 done
 
 run_guard_ablation_sweep
