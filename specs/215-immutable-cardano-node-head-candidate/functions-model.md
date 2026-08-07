@@ -70,3 +70,23 @@ asserted from it (I215-06).
 `tests/test-daily-cardano-node-head.sh` takes no arguments, requires no
 network, Docker, or Nix, prints one `PASS <scenario>` line per satisfied
 scenario, and exits non-zero on the first unsatisfied assertion.
+
+## Mutation harness (M-07, mandate v2)
+
+`tests/mutants/daily-cardano-node-head.sh` takes no positional arguments.
+
+| Variable | Type | Meaning |
+|---|---|---|
+| `MUTANT_WORKDIR` | absolute path | scratch root for materialized copies; defaults to a fresh temporary directory |
+
+Stdout: one line per mutant, `<mutant-id> caught|survived`, followed by a
+final `MUTANTS <caught>/<total>` line. Exit `0` only when every named mutant is
+caught.
+
+Signature-level constraints:
+
+- each mutant verifies that its own edit applied before the suite runs, and an
+  unapplied edit is a harness failure, never a silent pass;
+- the harness materializes a copy and never edits a tracked path;
+- the named mutant set is at minimum the thirteen auditor-established ids
+  listed in `tasks.md` T2157.

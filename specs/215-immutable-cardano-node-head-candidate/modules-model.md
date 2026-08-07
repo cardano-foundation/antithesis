@@ -35,3 +35,15 @@ couple #216's schedule contract to an unrelated repository's daily job. If a
 third controller appears, the recurring shape (transport-injected stage machine
 with a fail-closed receipt) becomes a consolidation candidate for the epic
 owner's invariant ledger.
+
+## M-07 (mandate v2) — mutation harness
+
+| ID | Module | Responsibility | Depends on | Owned by slice |
+|---|---|---|---|---|
+| M-07 | `tests/mutants/daily-cardano-node-head.sh` | Apply each named mutant to a throwaway copy of the tree, prove the mutation actually applied, run M-04 against it, and require every named mutant to be caught (I215-11). Never mutates the working tree. | M-04 | S1 |
+
+M-07 is the instrument that keeps M-04 honest, and it is a check like any
+other: it must itself be shown able to fail. A mutant whose edit silently does
+not apply is a false negative, so each mutant verifies its own application
+before the suite runs. M-07 mutates only a materialized copy; the candidate
+tree must be byte-identical before and after a run.

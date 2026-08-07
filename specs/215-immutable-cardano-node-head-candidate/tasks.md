@@ -42,3 +42,21 @@ audited and accepted by the ticket owner.
 - [ ] T2172 Pull-request job running only the hermetic test suite (R-09).
 - [ ] T2173 Operator documentation naming the manual recovery entrypoint, each
       fail-closed stop, and the receipt fields (R-09).
+
+## S1 — mandate v2 additions
+
+- [ ] T2157 Shipped mutation harness `tests/mutants/daily-cardano-node-head.sh`
+      covering at minimum the thirteen auditor-established mutant ids, each
+      verifying its own application, every one caught (I215-11):
+      `I215-01-remove-observation-cardinality`, `I215-01-wrong-fixed-origin`,
+      `I215-02-remove-tag-equality`, `I215-03-remove-revision-equality`,
+      `I215-04-remove-zero-census-reason`,
+      `I215-04-describe-ignores-rendered-model`,
+      `I215-04-remove-node-image-equality`, `I215-05-validate-wrong-model`,
+      `I215-06-duplicate-submit`, `I215-07-hidden-submission-client`,
+      `I215-08-manual-specific-validation-target`,
+      `I215-09-later-field-on-compose-failure`,
+      `ENTRY-remove-transport-preflight`.
+- [ ] T2158 Spy-not-oracle fake transport and reason-token negative controls
+      per `spec.md` "Proof architecture"; deterministic suite with no
+      `printf | grep -q` pipefail race.

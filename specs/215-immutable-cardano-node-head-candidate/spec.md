@@ -48,6 +48,44 @@ invariants `E214-01..05` map as noted; `E214-06..09` belong to #216.
 | I215-08 | One production code path | preparation or validation logic is duplicated per mode | the same controller runs in every mode and only the injected transport differs |
 | I215-09 | Receipts are honest | a failing run emits a success outcome or omits its failing stage | each stage appends a `CandidateReceiptV1` record; a failure records `outcome=FAILED` with the failing stage and an error reason |
 | I215-10 | Secrets never leak | any credential value appears in a receipt, log, fixture, brief, or document | credentials are passed only through the process environment of the effecting command |
+| I215-11 | Every proof can fail | any named mutant in the shipped mutation harness leaves the suite green | the harness applies each named mutant, proves it applied, and the suite goes red for every one |
+
+## Proof architecture (mandate v2)
+
+The invariants above state what must hold. This section states how a proof of
+them must be built, because a proof that cannot fail satisfies the table
+vacuously.
+
+- **The test double is a spy, not an oracle.** The fake transport records what
+  it received. It must not derive an observation from the controller's own
+  arguments where the invariant is about that argument's value. An expected
+  value comes from the scenario fixture; the controller's input is evidence,
+  never the expected answer.
+- **Assertions name the reason, not just the stage.** A negative control that
+  only proves "some failure occurred at stage X" passes for the wrong reason.
+  Each control asserts the failing stage *and* its stable error token.
+- **Rendered artifacts are witnessed.** Any operation that receives a rendered
+  model must observably depend on that model's content; a scenario must fail
+  when the controller passes a different path.
+- **Reachability is read from the invocation log**, never from controller
+  stdout or a claim.
+- **The suite is deterministic.** A required command that is intermittently
+  red is a failed command. Note in particular that
+  `printf … | grep -q` under `set -o pipefail` fails when `grep` exits early
+  and `printf` takes `SIGPIPE`.
+- **Mutation survival is the acceptance criterion for the proofs themselves**
+  (I215-11), and the harness that establishes it ships in the repository so it
+  keeps running after this ticket closes.
+
+### Findings become properties
+
+An audit finding is not closed by a point fix. The commit owner converts every
+finding into a **permanent property in the shipped suite** — the general rule
+the finding is an instance of — so the same defect class cannot recur silently.
+An auditor's own instrumentation is read-only seed evidence for that work; the
+commit owner owns every shipped line of it. A repair that makes the exact
+reported mutant red while leaving its class undetected has not closed the
+finding.
 
 ## Rejection behavior
 

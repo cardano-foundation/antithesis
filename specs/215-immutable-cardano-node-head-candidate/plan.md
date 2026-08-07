@@ -73,6 +73,34 @@ inside this ticket's scope and are reported upward as informational:
 | Fake transport drifting from the real operation surface | both implement one documented operation surface; the controller is the only caller and rejects malformed observations from either |
 | Uniformity proved on text instead of resolution | `verify-topology` consumes Compose-resolved rows only |
 
+## Mandate v2 — why the proof architecture is now specified
+
+The first S1 campaign produced two audited submissions. Both passed every
+named verification command, the frozen slice gate, and the ticket gate; both
+were rejected by independent auditors on mutation and value coverage. Reports:
+`audit-report-S1-submission-1.md` (8 blocking, sha256 `4a211292…`) and
+`audit-report-S1-submission-2.md` (6 blocking, sha256 `42858079…`).
+
+Every surviving mutant across both audits is one shape: **the fake transport
+was both the effect double and the source of the expected values**, so
+assertions compared the controller against numbers derived from the
+controller's own arguments. Deleting the origin requirement, the rendered-model
+witness, the node-image comparator, the zero-census guard, or the Compose
+target each left the suite green.
+
+Two structural consequences, both now part of the mandate:
+
+1. `spec.md` "Proof architecture" constrains how proofs are built, not only
+   what they assert.
+2. I215-11 makes mutation survival an invariant, and the mutation harness
+   becomes a shipped repository artifact rather than an auditor's scratch
+   work. Both auditors built such a harness by hand and both were discarded;
+   the second one — 13 named mutants, each verifying that its own mutation
+   applied before running the suite — is the seed for the shipped one.
+
+The named mutant set is the auditor-established minimum. On the rejected
+candidate `508efd33` it caught 5 and missed 8; all 13 must be caught.
+
 ## Slices
 
 Ordered, bisect-safe, each one OWNER-mode with a Grok commit owner and a fresh
