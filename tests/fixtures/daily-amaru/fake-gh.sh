@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Deterministic stand-in for the `gh` CLI inside the scheduled-runner controls.
-# It performs no network call and records every invocation so a proof can count
-# the business effects a broken precondition was allowed to reach.
+# Deterministic `gh` stand-in: no network call, and every invocation recorded so
+# a proof can count the effects a broken precondition was allowed to reach.
 log_file=${DAILY_AMARU_FAKE_GH_LOG:?DAILY_AMARU_FAKE_GH_LOG is required}
 
 {

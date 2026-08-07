@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-
 mode=${DAILY_AMARU_MODE:-production}
-transport=${DAILY_AMARU_TRANSPORT:-$script_dir/daily-amaru-github.sh}
-day=${DAILY_AMARU_DAY:-$(date -u +%F)}
 identity=${DAILY_AMARU_IDENTITY:-}
 state_dir=${DAILY_AMARU_STATE_DIR:-${RUNNER_TEMP:-/tmp}/daily-amaru}
 receipt_path=${DAILY_AMARU_RECEIPT:-$state_dir/receipt}
@@ -18,16 +14,23 @@ die() {
   exit 1
 }
 
-[[ "$day" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] ||
-  die "invalid UTC day: $day"
+# Builtin-only dirname: the failure receipt must stay reachable while the
+# external command set is still unverified, so nothing here may shell out.
+path_directory() {
+  local path=$1
+  if [[ "$path" != */* ]]; then
+    printf '.'
+    return 0
+  fi
+  path=${path%/*}
+  printf '%s' "${path:-/}"
+}
 
 case "$mode" in
   production | manual | pull_request | test) ;;
   *) die "unsupported mode: $mode" ;;
 esac
 
-[ -x "$transport" ] || die "transport is not executable: $transport"
-mkdir -p "$state_dir"
 export DAILY_AMARU_STATE_DIR=$state_dir
 export DAILY_AMARU_RECEIPT=$receipt_path
 
@@ -36,7 +39,6 @@ transport_call() {
 }
 
 declare -A receipt=()
-receipt[day]=$day
 receipt[upstream_origin]=$origin
 receipt[upstream_ref]=$ref
 
@@ -75,11 +77,14 @@ compose_receipt() {
   done
 }
 
-# The local receipt is refreshed before any external publication is requested,
-# so a transport whose own preconditions are broken cannot erase the only
-# record that the day produced a decision.
+# Refreshed before any external publication, so a transport whose own
+# preconditions are broken cannot erase the only record of the day.
 persist_local_receipt() {
-  mkdir -p "$(dirname "$receipt_path")"
+  local receipt_dir
+  receipt_dir=$(path_directory "$receipt_path")
+  if [ ! -d "$receipt_dir" ]; then
+    mkdir -p -- "$receipt_dir" 2>/dev/null || true
+  fi
   printf '%s\n' "${receipt_fields[@]}" >"$receipt_path"
 }
 
@@ -100,8 +105,33 @@ fail_stage() {
   die "$stage: $message"
 }
 
-# The scheduled runner contract is checked before the UTC day is claimed, so a
-# runner missing a required command costs neither the day nor a business effect.
+# First executable boundary: the commands needed to reach the transport at all,
+# checked with builtins only so absence is classified rather than crashing.
+bootstrap_command_census=(dirname mkdir)
+[ -n "${DAILY_AMARU_DAY:-}" ] || bootstrap_command_census+=(date)
+for command in "${bootstrap_command_census[@]}"; do
+  if ! command -v "$command" >/dev/null 2>&1; then
+    printf 'daily-amaru: missing command: %s\n' "$command" >&2
+    receipt[day]=${DAILY_AMARU_DAY:-unknown}
+    compose_receipt runner-preflight FAILED "error=missing-command-$command"
+    persist_local_receipt
+    die "runner-preflight: missing-command-$command"
+  fi
+done
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+transport=${DAILY_AMARU_TRANSPORT:-$script_dir/daily-amaru-github.sh}
+day=${DAILY_AMARU_DAY:-$(date -u +%F)}
+receipt[day]=$day
+
+[[ "$day" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] ||
+  die "invalid UTC day: $day"
+
+[ -x "$transport" ] || die "transport is not executable: $transport"
+mkdir -p "$state_dir"
+
+# The full census is checked before the UTC day is claimed, so a runner missing
+# a required command costs neither the day nor a business effect.
 preflight_rc=0
 preflight_output=$(transport_call preflight) || preflight_rc=$?
 if [ "$preflight_rc" -ne 0 ]; then
@@ -165,8 +195,7 @@ if [ "$mode" = production ]; then
 else
   identity=dry-run
 fi
-# The bootstrap identity reaches the transport through the process environment
-# only; it is never placed on a command line where any process could read it.
+# Process environment only: never a command-line argument any process can read.
 export DAILY_AMARU_IDENTITY=$identity
 
 if ! transport_call claim-sha-attempt "$observed_sha"; then

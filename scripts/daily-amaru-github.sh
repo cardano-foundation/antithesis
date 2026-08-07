@@ -7,16 +7,13 @@ state_dir=${DAILY_AMARU_STATE_DIR:?DAILY_AMARU_STATE_DIR is required}
 bootstrap_repository=${DAILY_AMARU_BOOTSTRAP_REPOSITORY:-lambdasistemi/amaru-bootstrap}
 producer_image=ghcr.io/lambdasistemi/amaru-bootstrap-producer
 
-# The bootstrap App token authorizes lambdasistemi/amaru-bootstrap only. Every
-# same-repository operation uses the workflow's own short-lived repository
-# token instead; the two values are never interchangeable.
+# The App token authorizes lambdasistemi/amaru-bootstrap only; same-repository
+# operations use the workflow's own token. The two are never interchangeable.
 bootstrap_identity=${DAILY_AMARU_IDENTITY:-}
 repository_identity=${GH_TOKEN:-}
 
-# Every non-shell command a reachable production operation needs. The scheduled
-# runner provisions this set and `preflight` reports the first absent member by
-# name, so a missing dependency becomes a controller precondition failure long
-# before any business effect.
+# D213-04: every non-shell command a reachable production operation needs.
+# `preflight` reports the first absent member by name.
 scheduled_command_census=(
   gh git jq rg sed awk grep tail tr head seq sleep date docker nix
 )
@@ -39,8 +36,8 @@ need_command() {
   command -v "$1" >/dev/null 2>&1 || die "missing command: $1"
 }
 
-# Each operation declares the commands it actually reaches for, so publishing a
-# failure receipt never depends on the command whose absence it reports.
+# Per-operation, so publishing a failure receipt never depends on the command
+# whose absence it reports.
 require_commands() {
   local command
   for command in "$@"; do
@@ -133,6 +130,7 @@ case "$operation" in
     ;;
 
   claim-day)
+    # repository-token-permissions: issues=write
     require_commands gh grep
     day=${1:?day is required}
     marker="<!-- daily-amaru day=$day claim -->"
@@ -153,6 +151,7 @@ case "$operation" in
     ;;
 
   last-success-sha)
+    # repository-token-permissions: issues=read
     require_commands gh sed tail
     issue_bodies |
       sed -nE 's/^<!-- daily-amaru last-success sha=([0-9a-f]{40}) -->$/\1/p' |
@@ -160,6 +159,7 @@ case "$operation" in
     ;;
 
   claim-sha-attempt)
+    # repository-token-permissions: issues=write
     require_commands gh grep
     sha=${1:?upstream SHA is required}
     marker="<!-- daily-amaru attempted-sha=$sha -->"
@@ -248,6 +248,7 @@ case "$operation" in
     ;;
 
   prepare-consumer-repin)
+    # repository-token-permissions: contents=write pull-requests=write
     require_commands gh git rg sed
     image_ref=${1:?image reference is required}
     day=${DAILY_AMARU_DAY:?DAILY_AMARU_DAY is required}
@@ -285,6 +286,7 @@ case "$operation" in
     ;;
 
   require-consumer-checks)
+    # repository-token-permissions: actions=read checks=read
     require_commands gh jq awk
     candidate=${1:?consumer candidate is required}
     # TODO(cardano-node-antithesis#208): replace this explicit current-head
@@ -315,6 +317,7 @@ case "$operation" in
     ;;
 
   await-supervised-integration)
+    # repository-token-permissions: contents=read pull-requests=read
     require_commands gh jq
     candidate=${1:?consumer candidate is required}
     # TODO(cardano-node-antithesis#207): replace lane-supervised integration
@@ -345,6 +348,7 @@ case "$operation" in
     ;;
 
   real-launch)
+    # repository-token-permissions: actions=write contents=read
     require_commands gh date seq sleep head
     workflow=${1:?workflow is required}
     testnet=${2:?testnet is required}
@@ -375,8 +379,8 @@ case "$operation" in
     ;;
 
   receipt)
-    # Minimum dependency surface on purpose: external publication of a failure
-    # receipt must not require the command whose absence it is reporting.
+    # repository-token-permissions: issues=write
+    # Minimum dependency surface on purpose.
     require_commands gh
     # TODO(cardano-node-antithesis#206): replace issue-comment receipts with
     # complete per-property accounting and an independent missing-day alarm.

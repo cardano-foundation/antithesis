@@ -29,9 +29,11 @@ jobs:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    # Exactly what the transport's same-repository operations declare they need.
     permissions:
       actions: write
-      contents: read
+      checks: read
+      contents: write
       issues: write
       pull-requests: write
     env:
@@ -43,8 +45,7 @@ jobs:
       - name: Check out exact main
         uses: actions/checkout@v6
 
-      # The stock runner carries neither ripgrep nor nix; the controller's own
-      # dependency preflight fails loudly if this provisioning ever regresses.
+      # The controller's preflight fails loudly if this ever regresses.
       - name: Provision the scheduled dependency census
         run: |
           set -euo pipefail
@@ -54,9 +55,8 @@ jobs:
         with:
           cachix-auth-token: "${{ secrets.CACHIX_AUTH_TOKEN }}"
 
-      # An absent variable, an absent secret, or an unsuccessful mint must still
-      # reach the controller with an empty bootstrap identity, so the failure is
-      # a stage of the state machine rather than a skipped setup step.
+      # An absent input or failed mint must still reach the controller with an
+      # empty identity, so the failure is a stage, not a skipped setup step.
       - name: Mint the dedicated bootstrap App identity
         id: app-token
         continue-on-error: true
