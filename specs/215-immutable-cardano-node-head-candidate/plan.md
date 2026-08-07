@@ -155,3 +155,34 @@ The ticket gate additionally runs `shellcheck` over the new shell, re-runs
 frozen-base blob (I215/R-10). Slices S1 and S2 name commands that cannot pass
 before their own files exist; each slice gate is proved able to fail against
 the frozen base before dispatch.
+
+## Mandate v3 — I215-07 moves from observation to containment
+
+Campaign 3 closed with two blocking findings that were, again, I215-07. Across
+four consecutive audits the same invariant failed with a different escape each
+time: one forbidden command name; two syntactic invocation forms; `execve`-only
+tracing; and finally an inherited descriptor plus a filesystem write. The last
+audit demonstrated the escape with **a single one-line change to the fake
+transport and no edit to the suite at all** — 1,845 bytes reaching an external
+TCP listener while the suite printed `PASS no-real-submission`.
+
+Every one of those repairs was correct. The mandate was wrong: it asked for the
+egress channels to be *enumerated*, and that set is open-ended. Worse, the
+observer established its own traced region from inside the file it observes, so
+it could never bound what crossed into the region before it started.
+
+v3 therefore proves I215-07 by containment — see `spec.md` "I215-07 is proved by
+containment, not observation". The suite runs inside an OS-enforced container
+with no network and no writable path outside its scratch root; green inside
+those walls is the proof, and the walls themselves carry negative controls.
+
+This is expected to be **smaller and cheaper** than what it replaces: it deletes
+the syscall observer and its allowlist, removes roughly 285 seconds per gate
+run, and ends the enumeration loop. If it turns out larger, that is a signal the
+approach is wrong and the owner should stop and ask rather than proceed.
+
+Everything else from campaign 3 is retained: D-05 receipt value coverage
+(13/13, no holes, enumeration live in both directions), the model-derived
+rendered-model witness inventory, the guard-ablation sweep (33/33, zero
+survivors), determinism, and the R-02 image-repository default. None of it may
+regress.

@@ -60,3 +60,12 @@ audited and accepted by the ticket owner.
 - [ ] T2158 Spy-not-oracle fake transport and reason-token negative controls
       per `spec.md` "Proof architecture"; deterministic suite with no
       `printf | grep -q` pipefail race.
+
+## S1 — mandate v3
+
+- [ ] T2159 Prove I215-07 by containment: run the complete suite inside an
+      OS-enforced container with no network and no writable path outside its
+      scratch root, fail closed when the mechanism is unavailable, and give the
+      walls their own negative controls (a seeded outbound connection and a
+      seeded write outside scratch must each fail the run). Remove the
+      syscall-observation apparatus it replaces.
