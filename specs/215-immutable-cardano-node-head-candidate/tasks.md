@@ -5,18 +5,18 @@ audited and accepted by the ticket owner.
 
 ## S1 — controller-policy
 
-- [ ] T2151 Deterministic fake transport implementing the full operation
+- [x] T2151 Deterministic fake transport implementing the full operation
       surface with per-scenario observations and an append-only invocation log.
-- [ ] T2152 Controller stage machine with fail-closed exits and
+- [x] T2152 Controller stage machine with fail-closed exits and
       `CandidateReceiptV1` composition (I215-08, I215-09).
-- [ ] T2153 Observation validation for `resolve-upstream` and candidate-form
+- [x] T2153 Observation validation for `resolve-upstream` and candidate-form
       validation for `publish-candidate` (I215-01, I215-02 form).
-- [ ] T2154 Topology census, equality, and stale-reference rejection over
+- [x] T2154 Topology census, equality, and stale-reference rejection over
       Compose-resolved rows; Compose-validation stage (I215-04, I215-05).
-- [ ] T2155 Submission-reachability control: exactly one fake submission on the
+- [x] T2155 Submission-reachability control: exactly one fake submission on the
       complete path, zero in every negative control, and no real-submission
       operation anywhere (I215-06, I215-07).
-- [ ] T2156 Test suite with one named scenario per invariant and per negative
+- [x] T2156 Test suite with one named scenario per invariant and per negative
       control: wrong ref, wrong origin, malformed and ambiguous observation,
       publish failure, malformed candidate form, revision mismatch, stale
       topology override, missing service, zero census, Compose failure,
@@ -45,7 +45,7 @@ audited and accepted by the ticket owner.
 
 ## S1 — mandate v2 additions
 
-- [ ] T2157 Shipped mutation harness `tests/mutants/daily-cardano-node-head.sh`
+- [x] T2157 Shipped mutation harness `tests/mutants/daily-cardano-node-head.sh`
       covering at minimum the thirteen auditor-established mutant ids, each
       verifying its own application, every one caught (I215-11):
       `I215-01-remove-observation-cardinality`, `I215-01-wrong-fixed-origin`,
@@ -57,19 +57,19 @@ audited and accepted by the ticket owner.
       `I215-08-manual-specific-validation-target`,
       `I215-09-later-field-on-compose-failure`,
       `ENTRY-remove-transport-preflight`.
-- [ ] T2158 Spy-not-oracle fake transport and reason-token negative controls
+- [x] T2158 Spy-not-oracle fake transport and reason-token negative controls
       per `spec.md` "Proof architecture"; deterministic suite with no
       `printf | grep -q` pipefail race.
 
 ## S1 — mandate v3
 
-- [ ] T2159 Prove I215-07 by containment: run the complete suite inside an
+- [x] T2159 Prove I215-07 by containment: run the complete suite inside an
       OS-enforced container with no network and no writable path outside its
       scratch root, fail closed when the mechanism is unavailable, and give the
       walls their own negative controls (a seeded outbound connection and a
       seeded write outside scratch must each fail the run). Remove the
       syscall-observation apparatus it replaces.
-- [ ] T2160 Construct the containment filesystem view from explicit binds
+- [x] T2160 Construct the containment filesystem view from explicit binds
       instead of `--ro-bind / /` plus masking, so no pre-existing rendezvous
       object is reachable by name, and add a name-bound negative control whose
       endpoint exists before entry.

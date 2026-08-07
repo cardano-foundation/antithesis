@@ -37,6 +37,9 @@ else
 fi
 network_listener_pid=''
 filesystem_effect=''
+preexisting_endpoint_effect=''
+preexisting_endpoint_inner=''
+preexisting_endpoint_path=''
 cleanup() {
   if [ -n "$network_listener_pid" ]; then
     kill "$network_listener_pid" 2>/dev/null || true
@@ -139,6 +142,28 @@ start_network_listener() {
   }
 }
 
+start_preexisting_endpoint_listener() {
+  local listener
+  listener=$(command -v socat || true)
+  [ -n "$listener" ] && [ -x "$listener" ] ||
+    die 'pathname endpoint negative control requires socat'
+  preexisting_endpoint_path="$case_root/preexisting-rendezvous.sock"
+  preexisting_endpoint_inner=/repo/preexisting-rendezvous.sock
+  preexisting_endpoint_effect="$case_root/preexisting-endpoint-effect"
+  : >"$preexisting_endpoint_effect"
+  "$listener" -u \
+    "UNIX-LISTEN:$preexisting_endpoint_path,fork" \
+    "OPEN:$preexisting_endpoint_effect,creat,append" \
+    >"$case_root/preexisting-endpoint-listener.log" 2>&1 &
+  network_listener_pid=$!
+  sleep 0.2
+  kill -0 "$network_listener_pid" 2>/dev/null &&
+    [ -S "$preexisting_endpoint_path" ] || {
+      cat "$case_root/preexisting-endpoint-listener.log" >&2
+      die 'pathname endpoint negative-control listener did not start'
+    }
+}
+
 stop_network_listener() {
   if [ -n "$network_listener_pid" ]; then
     kill "$network_listener_pid" 2>/dev/null || true
@@ -217,6 +242,12 @@ apply_mutant() {
       insert_before_once "$fake" \
         '    log fake-submit "$rendered_model" "$candidate_ref" "$sha"' \
         "    printf 'REAL-SUBMIT:%s:%s' \"\$candidate_ref\" \"\$sha\" >>\"$filesystem_effect\""
+      ;;
+    I215-07-wall-preexisting-endpoint-by-name)
+      start_preexisting_endpoint_listener
+      insert_before_once "$fake" \
+        '    log fake-submit "$rendered_model" "$candidate_ref" "$sha"' \
+        "    endpoint=$preexisting_endpoint_path; [ -S \"\$endpoint\" ] || endpoint=$preexisting_endpoint_inner; printf 'REAL-SUBMIT:%s:%s' \"\$candidate_ref\" \"\$sha\" | socat -u - UNIX-CONNECT:\$endpoint"
       ;;
     I215-08-manual-specific-validation-target)
       insert_before_once "$controller" \
@@ -310,6 +341,7 @@ mutants=(
   I215-07-wall-network-egress
   I215-07-wall-inherited-fd-egress
   I215-07-wall-filesystem-egress
+  I215-07-wall-preexisting-endpoint-by-name
   I215-08-manual-specific-validation-target
   I215-09-later-field-on-compose-failure
   D05-drop-mode-field
@@ -409,14 +441,16 @@ for mutant in "${mutants[@]}"; do
         printf 'WALL-CONTROL %s seed=proved containment=blocked\n' "$mutant"
       fi
       ;;
-    I215-07-wall-network-egress | I215-07-wall-filesystem-egress)
+    I215-07-wall-network-egress | I215-07-wall-filesystem-egress | \
+      I215-07-wall-preexisting-endpoint-by-name)
       control_rc=0
       "$case_root/$suite_rel" >"$case_root/control.log" 2>&1 || control_rc=$?
       [ "$control_rc" -eq 0 ] ||
         die "$mutant seed failed without containment"
       case "$mutant" in
         I215-07-wall-network-egress) effect_file="$case_root/network-effect" ;;
-        *) effect_file="$filesystem_effect" ;;
+        I215-07-wall-filesystem-egress) effect_file="$filesystem_effect" ;;
+        *) effect_file="$preexisting_endpoint_effect" ;;
       esac
       [ -s "$effect_file" ] ||
         die "$mutant did not execute its uncontained negative control"
