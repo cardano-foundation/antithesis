@@ -36,11 +36,13 @@ else
   scratch_root=$(mktemp -d)
 fi
 network_listener_pid=''
+filesystem_effect=''
 cleanup() {
   if [ -n "$network_listener_pid" ]; then
     kill "$network_listener_pid" 2>/dev/null || true
     wait "$network_listener_pid" 2>/dev/null || true
   fi
+  [ -z "$filesystem_effect" ] || rm -f -- "$filesystem_effect"
   rm -rf -- "$scratch_root"
 }
 trap cleanup EXIT
@@ -204,10 +206,11 @@ apply_mutant() {
         "    exec 9<>/dev/tcp/127.0.0.1/$network_port; printf 'REAL-SUBMIT:%s:%s' \"\$candidate_ref\" \"\$sha\" >&9; exec 9>&-"
       ;;
     I215-07-wall-filesystem-egress)
-      : >"$case_root/filesystem-effect"
+      filesystem_effect="/dev/shm/daily-cardano-node-head-wall.$$.effect"
+      : >"$filesystem_effect"
       insert_before_once "$fake" \
         '    log fake-submit "$rendered_model" "$candidate_ref" "$sha"' \
-        "    printf 'REAL-SUBMIT:%s:%s' \"\$candidate_ref\" \"\$sha\" >>\"$case_root/filesystem-effect\""
+        "    printf 'REAL-SUBMIT:%s:%s' \"\$candidate_ref\" \"\$sha\" >>\"$filesystem_effect\""
       ;;
     I215-08-manual-specific-validation-target)
       insert_before_once "$controller" \
@@ -358,8 +361,7 @@ run_guard_ablation_sweep() {
     after=$(sha256sum "$controller")
     [ "$before" != "$after" ] || die "guard ablation did not apply: $original"
     bash -n "$controller" || die "guard ablation produced invalid shell: $original"
-    if HEAD_CANDIDATE_EXECVE_INNER=1 \
-      "$case_root/$suite_rel" >"$case_root/suite.log" 2>&1; then
+    if "$case_root/$suite_rel" >"$case_root/suite.log" 2>&1; then
       survived=$((survived + 1))
       printf 'GUARD-SURVIVED %s\n' "$original" >&2
     fi
@@ -382,13 +384,12 @@ for mutant in "${mutants[@]}"; do
   case "$mutant" in
     I215-07-wall-network-egress | I215-07-wall-filesystem-egress)
       control_rc=0
-      HEAD_CANDIDATE_EXECVE_INNER=1 \
-        "$case_root/$suite_rel" >"$case_root/control.log" 2>&1 || control_rc=$?
+      "$case_root/$suite_rel" >"$case_root/control.log" 2>&1 || control_rc=$?
       [ "$control_rc" -eq 0 ] ||
         die "$mutant seed failed without containment"
       case "$mutant" in
         I215-07-wall-network-egress) effect_file="$case_root/network-effect" ;;
-        *) effect_file="$case_root/filesystem-effect" ;;
+        *) effect_file="$filesystem_effect" ;;
       esac
       [ -s "$effect_file" ] ||
         die "$mutant did not execute its uncontained negative control"
@@ -401,8 +402,7 @@ for mutant in "${mutants[@]}"; do
       fi
       ;;
     *)
-      HEAD_CANDIDATE_EXECVE_INNER=1 \
-        "$case_root/$suite_rel" >"$case_root/suite.log" 2>&1 || suite_rc=$?
+      "$case_root/$suite_rel" >"$case_root/suite.log" 2>&1 || suite_rc=$?
       ;;
   esac
   stop_network_listener
