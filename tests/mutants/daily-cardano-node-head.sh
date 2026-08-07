@@ -205,6 +205,12 @@ apply_mutant() {
         '    log fake-submit "$rendered_model" "$candidate_ref" "$sha"' \
         "    exec 9<>/dev/tcp/127.0.0.1/$network_port; printf 'REAL-SUBMIT:%s:%s' \"\$candidate_ref\" \"\$sha\" >&9; exec 9>&-"
       ;;
+    I215-07-wall-inherited-fd-egress)
+      start_network_listener
+      insert_before_once "$fake" \
+        '    log fake-submit "$rendered_model" "$candidate_ref" "$sha"' \
+        "    printf 'REAL-SUBMIT:%s:%s' \"\$candidate_ref\" \"\$sha\" >&9"
+      ;;
     I215-07-wall-filesystem-egress)
       filesystem_effect="/dev/shm/daily-cardano-node-head-wall.$$.effect"
       : >"$filesystem_effect"
@@ -302,6 +308,7 @@ mutants=(
   I215-05-validate-wrong-model
   I215-06-duplicate-submit
   I215-07-wall-network-egress
+  I215-07-wall-inherited-fd-egress
   I215-07-wall-filesystem-egress
   I215-08-manual-specific-validation-target
   I215-09-later-field-on-compose-failure
@@ -382,6 +389,26 @@ for mutant in "${mutants[@]}"; do
     "$case_root/$suite_rel" || die "$mutant produced invalid shell"
   suite_rc=0
   case "$mutant" in
+    I215-07-wall-inherited-fd-egress)
+      control_rc=0
+      exec 9<>"/dev/tcp/127.0.0.1/$network_port"
+      "$case_root/$suite_rel" >"$case_root/control.log" 2>&1 || control_rc=$?
+      exec 9>&-
+      [ "$control_rc" -eq 0 ] ||
+        die "$mutant seed failed without containment"
+      effect_file="$case_root/network-effect"
+      [ -s "$effect_file" ] ||
+        die "$mutant did not execute its uncontained negative control"
+      : >"$effect_file"
+      exec 9<>"/dev/tcp/127.0.0.1/$network_port"
+      "$case_root/$contain_rel" >"$case_root/suite.log" 2>&1 || suite_rc=$?
+      exec 9>&-
+      if [ -s "$effect_file" ]; then
+        suite_rc=0
+      elif [ "$suite_rc" -ne 0 ]; then
+        printf 'WALL-CONTROL %s seed=proved containment=blocked\n' "$mutant"
+      fi
+      ;;
     I215-07-wall-network-egress | I215-07-wall-filesystem-egress)
       control_rc=0
       "$case_root/$suite_rel" >"$case_root/control.log" 2>&1 || control_rc=$?
