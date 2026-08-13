@@ -26,6 +26,14 @@ path_directory() {
   printf '%s' "${path:-/}"
 }
 
+# Builtin-only UTC day: the failure receipt must still carry a real day when
+# the missing external command is `date` itself.
+utc_day() {
+  local day=${DAILY_AMARU_DAY:-}
+  [ -n "$day" ] || day=$(TZ=UTC0 printf '%(%Y-%m-%d)T' -1)
+  printf '%s' "$day"
+}
+
 case "$mode" in
   production | manual | pull_request | test) ;;
   *) die "unsupported mode: $mode" ;;
@@ -77,15 +85,26 @@ compose_receipt() {
   done
 }
 
+# Independently writable durable sink. An unreachable primary receipt path —
+# a nested parent the runner never created, with `mkdir` itself missing — must
+# not erase the machine-readable failure.
+publish_independent_receipt() {
+  printf '%s\n' "${receipt_fields[@]}" >&2
+}
+
 # Refreshed before any external publication, so a transport whose own
-# preconditions are broken cannot erase the only record of the day.
+# preconditions are broken cannot erase the only record of the day. The primary
+# receipt stays authoritative wherever it is writable.
 persist_local_receipt() {
   local receipt_dir
   receipt_dir=$(path_directory "$receipt_path")
   if [ ! -d "$receipt_dir" ]; then
     mkdir -p -- "$receipt_dir" 2>/dev/null || true
   fi
-  printf '%s\n' "${receipt_fields[@]}" >"$receipt_path"
+  if printf '%s\n' "${receipt_fields[@]}" >"$receipt_path"; then
+    return 0
+  fi
+  publish_independent_receipt
 }
 
 write_receipt() {
@@ -112,7 +131,7 @@ bootstrap_command_census=(dirname mkdir)
 for command in "${bootstrap_command_census[@]}"; do
   if ! command -v "$command" >/dev/null 2>&1; then
     printf 'daily-amaru: missing command: %s\n' "$command" >&2
-    receipt[day]=${DAILY_AMARU_DAY:-unknown}
+    receipt[day]=$(utc_day)
     compose_receipt runner-preflight FAILED "error=missing-command-$command"
     persist_local_receipt
     die "runner-preflight: missing-command-$command"

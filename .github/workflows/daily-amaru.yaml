@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Check out the exact candidate
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Exercise the controller through the fake transport
         run: tests/test-daily-amaru.sh
 
@@ -72,12 +74,15 @@ jobs:
           permission-pull-requests: write
           permission-metadata: read
 
+      # Always reached: a failed dependency or mint step must become a
+      # classified receipt, not a skipped controller. The controller derives
+      # the UTC day itself, so no external command stands before that boundary.
       - name: Run the once-daily state machine
+        if: always()
         env:
           DAILY_AMARU_IDENTITY: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
-          export DAILY_AMARU_DAY="$(date -u +%F)"
           scripts/daily-amaru.sh
 
       - name: Publish the local decision receipt
@@ -86,4 +91,4 @@ jobs:
         with:
           name: daily-amaru-receipt-${{ github.run_id }}
           path: ${{ runner.temp }}/daily-amaru/receipt
-          if-no-files-found: warn
+          if-no-files-found: error
