@@ -174,11 +174,22 @@ bash_binary=$(command -v bash)
 # from an otherwise complete seeded PATH, or empty to seed nothing at all. An
 # absolute interpreter keeps even an empty PATH reaching the first boundary.
 run_hermetic_case() {
-  local label=$1 omit=$2 day=$3 script=${4:-$controller}
+  local label=$1 omit=$2 day=$3 script=${4:-$controller} parent=${5:-existing}
+  local day_env=(DAILY_AMARU_DAY="$day")
   hermetic_dir="$tmp_root/hermetic-$label"
-  hermetic_receipt="$hermetic_dir/receipt"
+  hermetic_state="$hermetic_dir/state"
+  # Production nests the receipt under a directory no step pre-creates, so the
+  # absent-parent class must be reachable without the harness building it.
+  [ "$parent" = existing ] || hermetic_state="$hermetic_dir/never-created/state"
+  hermetic_receipt="$hermetic_state/receipt"
   hermetic_effects="$hermetic_dir/effects"
-  mkdir -p "$hermetic_dir/state" "$hermetic_dir/bin"
+  # An unset day is the production shape: the controller, not the workflow,
+  # must derive the UTC day, so `date` becomes a first-boundary requirement.
+  [ -n "$day" ] || day_env=()
+  mkdir -p "$hermetic_dir/bin"
+  if [ "$parent" = existing ]; then
+    mkdir -p "$hermetic_state"
+  fi
   : >"$hermetic_effects"
   if [ -n "$omit" ]; then
     seed_scheduled_path "$hermetic_dir/bin" with-rg
@@ -192,12 +203,26 @@ run_hermetic_case() {
     PATH="$hermetic_dir/bin" \
     DAILY_AMARU_FAKE_GH_LOG="$hermetic_effects" \
     DAILY_AMARU_MODE=production \
-    DAILY_AMARU_DAY="$day" \
+    "${day_env[@]}" \
     DAILY_AMARU_IDENTITY=seed-non-empty-identity \
-    DAILY_AMARU_STATE_DIR="$hermetic_dir/state" \
+    DAILY_AMARU_STATE_DIR="$hermetic_state" \
     DAILY_AMARU_RECEIPT="$hermetic_receipt" \
     "$bash_binary" "$script" \
     >"$hermetic_dir/stdout" 2>"$hermetic_dir/stderr" || hermetic_rc=$?
+}
+
+# The primary receipt is authoritative while it is writable; an unreachable
+# primary must not erase the machine-readable failure, so the durable runner
+# stream is read exactly as the scheduled job would read it.
+hermetic_sink() {
+  hermetic_sink_kind=primary
+  hermetic_sink_path="$hermetic_dir/sink"
+  if [ -f "$hermetic_receipt" ]; then
+    cp "$hermetic_receipt" "$hermetic_sink_path"
+  else
+    hermetic_sink_kind=independent
+    cat "$hermetic_dir/stdout" "$hermetic_dir/stderr" >"$hermetic_sink_path"
+  fi
 }
 
 run_transport_preflight() {
@@ -350,8 +375,10 @@ pass scheduled-preflight-controls
 # F1: the transport preflight cannot classify the commands needed to reach the
 # transport itself. The census is read from the controller source, so a later
 # addition to it is covered here automatically.
+# Both the unconditional assignment and every conditional append, so a member
+# the controller only sometimes requires cannot escape the census claim.
 mapfile -t bootstrap_census < <(
-  sed -nE 's/^bootstrap_command_census=\((.*)\)$/\1/p' "$controller" |
+  sed -nE 's/.*bootstrap_command_census\+?=\((.+)\).*/\1/p' "$controller" |
     tr ' ' '\n' | sed '/^$/d'
 )
 [ "${#bootstrap_census[@]}" -ge 1 ] ||
@@ -366,18 +393,57 @@ receipt_oracle "$hermetic_receipt" 2026-08-02 runner-preflight \
   fail 'empty-PATH control produced no classified durable receipt'
 [ ! -s "$hermetic_effects" ] ||
   fail 'empty-PATH control reached a GitHub effect'
+# Every effective census member, over both production receipt-parent states.
+# `date` is only required when nothing pre-computes the day, so it is exercised
+# in exactly the shape that makes it a first-boundary requirement.
+boundary_sink_kinds=()
 for omitted in "${bootstrap_census[@]}"; do
-  run_hermetic_case "omit-$omitted" "$omitted" 2026-08-02
-  [ "$hermetic_rc" -ne 0 ] ||
-    fail "controller accepted a runner without $omitted"
-  grep -Fqx "daily-amaru: missing command: $omitted" "$hermetic_dir/stderr" ||
-    fail "absent $omitted was not named on stderr"
-  receipt_oracle "$hermetic_receipt" 2026-08-02 runner-preflight \
-    "missing-command-$omitted" "$hermetic_effects" ||
-    fail "absent $omitted produced no classified durable receipt"
-  [ ! -s "$hermetic_effects" ] ||
-    fail "absent $omitted reached a GitHub effect"
+  for parent in existing absent; do
+    boundary_day=2026-08-02
+    [ "$omitted" != date ] || boundary_day=''
+    run_hermetic_case "omit-$omitted-$parent" "$omitted" "$boundary_day" \
+      "$controller" "$parent"
+    [ "$hermetic_rc" -ne 0 ] ||
+      fail "controller accepted a runner without $omitted (parent=$parent)"
+    grep -Fqx "daily-amaru: missing command: $omitted" "$hermetic_dir/stderr" ||
+      fail "absent $omitted was not named on stderr (parent=$parent)"
+    hermetic_sink
+    boundary_expected_day=$boundary_day
+    if [ -z "$boundary_expected_day" ]; then
+      boundary_expected_day=$(
+        sed -nE 's/^day=([0-9]{4}-[0-9]{2}-[0-9]{2})$/\1/p' "$hermetic_sink_path" |
+          head -1
+      )
+      [ -n "$boundary_expected_day" ] ||
+        fail "absent $omitted left no valid UTC day in the sink (parent=$parent)"
+    fi
+    receipt_oracle "$hermetic_sink_path" "$boundary_expected_day" \
+      runner-preflight "missing-command-$omitted" "$hermetic_effects" ||
+      fail "absent $omitted (parent=$parent) left no classified durable sink"
+    [ ! -s "$hermetic_effects" ] ||
+      fail "absent $omitted (parent=$parent) reached a GitHub effect"
+    boundary_sink_kinds+=("$hermetic_sink_kind")
+  done
 done
+# Both sink paths must actually occur: a harness that pre-created every parent
+# would report the absent class green while never leaving the primary receipt.
+[[ " ${boundary_sink_kinds[*]} " == *" primary "* ]] ||
+  fail 'no first-boundary case reached the authoritative primary receipt'
+[[ " ${boundary_sink_kinds[*]} " == *" independent "* ]] ||
+  fail 'no first-boundary case exercised the independent durable sink'
+# Negative control for the independent sink: a controller that can only write
+# the primary receipt loses the verdict exactly when its parent is absent.
+sinkless_mutant="$tmp_root/controller-sinkless.sh"
+sed 's|^  publish_independent_receipt$|  : suppressed-independent-sink|' \
+  "$controller" >"$sinkless_mutant"
+grep -Fq ': suppressed-independent-sink' "$sinkless_mutant" ||
+  fail 'independent-sink mutation did not apply'
+run_hermetic_case sinkless-mutant mkdir 2026-08-02 "$sinkless_mutant" absent
+hermetic_sink
+if receipt_oracle "$hermetic_sink_path" 2026-08-02 runner-preflight \
+  missing-command-mkdir "$hermetic_effects"; then
+  fail 'a controller with no independent sink still published the failure'
+fi
 # Prove the control can fail: an empty boundary crashes instead of classifying.
 bootstrap_mutant="$tmp_root/controller-unguarded.sh"
 sed -E 's/^bootstrap_command_census=\(.*\)$/bootstrap_command_census=()/' \
@@ -389,8 +455,10 @@ if receipt_oracle "$hermetic_receipt" 2026-08-02 runner-preflight \
   "missing-command-${bootstrap_census[0]}" "$hermetic_effects"; then
   fail 'a controller without a bootstrap boundary still classified the failure'
 fi
-printf 'BOOTSTRAP-BOUNDARY census=%s members=%s empty_path_control=1 mutants_rejected=1\n' \
+printf 'BOOTSTRAP-BOUNDARY census=%s members=%s empty_path_control=1 mutants_rejected=2\n' \
   "${#bootstrap_census[@]}" "${bootstrap_census[*]}"
+printf 'FIRST-BOUNDARY-CONTROLS commands=%s parent_modes=existing,absent effects=0\n' \
+  "$(IFS=,; printf '%s' "${bootstrap_census[*]}")"
 pass bootstrap-command-boundary
 
 scheduled_effect_logs=()
@@ -753,7 +821,8 @@ assert_workflow_literal_once "if: github.event_name != 'schedule'"
 assert_workflow_literal_once "if: github.event_name == 'schedule'"
 assert_workflow_literal_once 'DAILY_AMARU_MODE: production'
 assert_workflow_literal_once 'uses: actions/upload-artifact@v6'
-assert_workflow_literal_once 'if: always()'
+[ "$(count_literal "$workflow" 'if: always()')" -eq 2 ] ||
+  fail 'the scheduled job must always reach both the controller and the publisher'
 assert_workflow_literal_once 'continue-on-error: true'
 [ "$(count_literal "$workflow" 'ripgrep')" -ge 1 ] ||
   fail 'the scheduled runner does not provision the incident command'
@@ -771,3 +840,71 @@ reject_mutant wiring-scheduled.yaml "$workflow" \
   'an orphaned scheduled controller caller' wiring_holds
 printf 'WIRING pull_request_proof=1 scheduled_controller=1 receipt_upload=1 mutants_rejected=2\n'
 pass workflow-wires-scheduled-proof
+
+# A named step's own lines, so a declaration belonging to a neighbouring step
+# can never be read as this one's.
+workflow_step() {
+  awk -v header="      - name: $2" '
+    $0 == header { inside = 1 }
+    inside && $0 != header && /^      - (name|uses):/ { exit }
+    inside { print }
+  ' "$1"
+}
+
+# INV-213-09: pull-request CI must execute the focused proof from the exact
+# candidate head, not from whatever ref the event happens to supply.
+pr_head_holds() {
+  local checkout
+  checkout=$(workflow_step "$1" 'Check out the exact candidate')
+  grep -Eq '^          ref: .*github\.event\.pull_request\.head\.sha' \
+    <<<"$checkout" || return 1
+  wiring_holds "$1"
+}
+
+# INV-213-02: the scheduled controller is reached whatever an earlier step did,
+# no external date stands before it, and an absent receipt fails the always-run
+# publisher instead of warning.
+receipt_publication_holds() {
+  local controller_step publisher
+  controller_step=$(workflow_step "$1" 'Run the once-daily state machine')
+  publisher=$(workflow_step "$1" 'Publish the local decision receipt')
+  grep -Eq '^        if: always\(\)$' <<<"$controller_step" || return 1
+  grep -Eq '^        if: always\(\)$' <<<"$publisher" || return 1
+  grep -Eq '^          if-no-files-found: error$' <<<"$publisher" || return 1
+  if awk '!/^[[:space:]]*#/' <<<"$controller_step" |
+    grep -Eq '(^|[^[:alnum:]_-])date([^[:alnum:]_-]|$)'; then
+    return 1
+  fi
+  return 0
+}
+
+pr_head_holds "$workflow" ||
+  fail 'pull-request CI does not run the focused proof from the exact candidate head'
+# shellcheck disable=SC2016
+reject_mutant pr-head-redirect.yaml "$workflow" \
+  's/github\.event\.pull_request\.head\.sha/github.sha/' 'github.sha' \
+  'a checkout redirected away from the candidate head' pr_head_holds
+reject_mutant pr-head-commented.yaml "$workflow" \
+  's|^          ref: |          # ref: |' '          # ref: ' \
+  'a commented-out candidate-head binding' pr_head_holds
+reject_mutant pr-head-caller-noop.yaml "$workflow" \
+  "s|^        run: tests/test-daily-amaru.sh\$|        # run: tests/test-daily-amaru.sh\n        run: 'true'|" \
+  "        run: 'true'" 'a no-op focused caller under a bound head' pr_head_holds
+printf 'PR-HEAD-WIRING explicit=1 focused_caller=1 mutants_rejected=3\n'
+pass pull-request-proof-runs-candidate-head
+
+receipt_publication_holds "$workflow" ||
+  fail 'the scheduled receipt is not always produced and fatally published'
+reject_mutant controller-not-always.yaml "$workflow" \
+  '0,/^        if: always()$/{s//        if: success()/}' '        if: success()' \
+  'a controller skipped after an earlier step failed' receipt_publication_holds
+reject_mutant receipt-warning.yaml "$workflow" \
+  's/^          if-no-files-found: error$/          if-no-files-found: warn/' \
+  '          if-no-files-found: warn' 'a receipt whose absence only warns' \
+  receipt_publication_holds
+reject_mutant controller-pre-date.yaml "$workflow" \
+  '/^          scripts\/daily-amaru.sh$/i\          date -u +%F >/dev/null' \
+  'date -u +%F' 'an external date invocation before controller entry' \
+  receipt_publication_holds
+printf 'RECEIPT-PUBLICATION controller_always=1 missing_artifact=fatal\n'
+pass scheduled-receipt-always-published
