@@ -36,7 +36,7 @@ command-line argument; the token is a step-scoped environment binding only.
 
 If an input or the mint step is unavailable, the mint is allowed to fail and the
 controller still runs with an empty identity, exiting non-zero at
-`stage=identity` with `error=missing-production-identity` before any bootstrap,
+`stage=identity` with `error=missing-credentials-<name>` before any bootstrap,
 image, repin, integration, or launch effect.
 
 Every receipt is written locally before external publication is requested, and
