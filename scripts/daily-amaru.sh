@@ -210,7 +210,15 @@ if [ "$observed_sha" = "$last_success" ]; then
 fi
 
 if [ "$mode" = production ]; then
-  [ -n "$identity" ] || fail_stage identity missing-production-identity
+  if [ -z "$identity" ]; then
+    missing_creds=()
+    [ -n "${DAILY_AMARU_APP_ID:-}" ] || missing_creds+=(DAILY_AMARU_APP_ID)
+    [ -n "${DAILY_AMARU_APP_PRIVATE_KEY:-}" ] || missing_creds+=(DAILY_AMARU_APP_PRIVATE_KEY)
+    if [ "${#missing_creds[@]}" -gt 0 ]; then
+      fail_stage identity "missing-credentials-$(IFS=,; printf '%s' "${missing_creds[*]}")"
+    fi
+    fail_stage identity missing-production-identity
+  fi
 else
   identity=dry-run
 fi
