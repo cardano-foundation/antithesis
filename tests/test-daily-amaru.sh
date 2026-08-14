@@ -1001,3 +1001,40 @@ fi
 
 printf 'IDENTITY-CREDENTIALS named=1 set_exact=1 generic_rejected=1 effects=0\n'
 pass identity-named-credentials
+
+# INV-213-B01: scheduled controller environment bindings
+scheduled_bindings_hold() {
+  local step
+  step=$(workflow_step "$1" 'Run the once-daily state machine')
+  grep -Eq '^[[:space:]]*DAILY_AMARU_APP_ID:[[:space:]]*\$\{\{[[:space:]]*vars\.DAILY_AMARU_APP_ID[[:space:]]*\}\}' <<<"$step" || return 1
+  grep -Eq '^[[:space:]]*DAILY_AMARU_APP_PRIVATE_KEY:[[:space:]]*\$\{\{[[:space:]]*secrets\.DAILY_AMARU_APP_PRIVATE_KEY[[:space:]]*\}\}' <<<"$step" || return 1
+}
+scheduled_bindings_hold "$workflow" ||
+  fail 'scheduled controller missing required credential env bindings'
+reject_mutant drop-app-id.yaml "$workflow" \
+  '/^[[:space:]]*DAILY_AMARU_APP_ID:/d' '!DAILY_AMARU_APP_ID:' \
+  'missing App ID binding' scheduled_bindings_hold
+reject_mutant drop-app-key.yaml "$workflow" \
+  '/^[[:space:]]*DAILY_AMARU_APP_PRIVATE_KEY:/d' '!DAILY_AMARU_APP_PRIVATE_KEY:' \
+  'missing App key binding' scheduled_bindings_hold
+
+# INV-213-P01: fully provisioned production path with 3 distinct nonempty sentinels
+prod_id=sentinel-prod-token
+prod_app=sentinel-prod-app-id
+prod_key=sentinel-prod-key
+[ "$prod_id" != "$prod_app" ] && [ "$prod_id" != "$prod_key" ] && [ "$prod_app" != "$prod_key" ] ||
+  fail 'sentinels must be distinct'
+run_case changed production "$prod_id" "$prod_app" "$prod_key"
+require_success
+assert_file_contains "$case_receipt" 'stage=complete'
+assert_file_contains "$case_receipt" 'outcome=CHANGED'
+assert_log_count 1 '^real-launch '
+! grep -rq "$prod_key" "$case_dir" || fail 'private key sentinel leaked to disk or log'
+
+# INV-213-B02: docs must describe named credentials and not promise generic missing-production-identity
+assert_file_lacks "$repo_root/docs/daily-amaru.md" 'error=missing-production-identity'
+grep -Fq 'error=missing-credentials-' "$repo_root/docs/daily-amaru.md" ||
+  fail 'docs must describe named-credential error'
+
+printf 'CREDENTIAL-BINDING workflow=1 tuple=1 docs=1\n'
+pass credential-binding-contract
