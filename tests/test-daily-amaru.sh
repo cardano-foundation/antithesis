@@ -137,6 +137,8 @@ run_case() {
   case_name=$1
   local mode=${2:-test}
   local identity=${3-test-identity}
+  local app_id=${4-}
+  local app_key=${5-}
   case_number=$((case_number + 1))
   case_dir="$tmp_root/$case_number-$case_name"
   case_state="$case_dir/state"
@@ -162,6 +164,8 @@ run_case() {
     DAILY_AMARU_MODE="$mode" \
     DAILY_AMARU_DAY=2026-07-31 \
     DAILY_AMARU_IDENTITY="$identity" \
+    DAILY_AMARU_APP_ID="$app_id" \
+    DAILY_AMARU_APP_PRIVATE_KEY="$app_key" \
     DAILY_AMARU_STATE_DIR="$case_state" \
     DAILY_AMARU_RECEIPT="$case_receipt" \
     DAILY_AMARU_ALLOW_REAL=1 \
@@ -516,9 +520,20 @@ assert_no_mutation
 assert_no_launch
 assert_honest_failure_receipt identity
 assert_file_contains "$case_receipt" 'day=2026-07-31'
-assert_file_contains "$case_receipt" 'error=missing-production-identity'
+assert_file_contains "$case_receipt" 'error=missing-credentials-DAILY_AMARU_APP_ID,DAILY_AMARU_APP_PRIVATE_KEY'
 identity_control_log=$case_log
 pass missing-identity
+
+for cred_case in 'missing-app-id|DAILY_AMARU_APP_ID||key-present' 'missing-app-key|DAILY_AMARU_APP_PRIVATE_KEY|id-present|'; do
+  IFS='|' read -r cname cmissing cid ckey <<<"$cred_case"
+  run_case "$cname" production '' "$cid" "$ckey"
+  require_failure
+  assert_no_mutation
+  assert_no_launch
+  assert_honest_failure_receipt identity
+  assert_file_contains "$case_receipt" "error=missing-credentials-$cmissing"
+  pass "$cname"
+done
 
 # A reported missing command, silence, and an unparsable success all become
 # stage=runner-preflight before the day is claimed. INV-213-01, INV-213-02.
@@ -958,3 +973,31 @@ grep -Fq 'transport preflight' "$hermetic_effects" ||
 
 printf 'EFFECT-STREAM gh=1 non_gh=1 positive_control=1 logger_required=1\n'
 pass effect-stream-discriminability
+
+# INV-213-C05: a generic-only identity error must not satisfy the proof.
+generic_id_dir="$tmp_root/generic-id-mutant"
+mkdir -p "$generic_id_dir"
+generic_id_controller="$generic_id_dir/daily-amaru.sh"
+sed 's/fail_stage identity .*/fail_stage identity missing-production-identity/' "$controller" >"$generic_id_controller"
+chmod +x "$generic_id_controller"
+generic_id_effects="$generic_id_dir/effects"
+: >"$generic_id_effects"
+generic_id_rc=0
+env \
+  PATH="$PATH" \
+  FAKE_SCENARIO=missing-identity \
+  FAKE_LOG="$generic_id_dir/transport.log" \
+  DAILY_AMARU_TRANSPORT="$fake_transport" \
+  DAILY_AMARU_MODE=production \
+  DAILY_AMARU_DAY=2026-07-31 \
+  DAILY_AMARU_IDENTITY="" \
+  DAILY_AMARU_STATE_DIR="$generic_id_dir/state" \
+  DAILY_AMARU_RECEIPT="$generic_id_dir/receipt" \
+  DAILY_AMARU_ALLOW_REAL=1 \
+  "$generic_id_controller" >/dev/null 2>&1 || generic_id_rc=$?
+if [ "$generic_id_rc" -eq 0 ] || grep -Fqx 'error=missing-credentials-DAILY_AMARU_APP_ID,DAILY_AMARU_APP_PRIVATE_KEY' "$generic_id_dir/receipt" 2>/dev/null; then
+  fail 'generic identity mutant unexpectedly passed named credential check'
+fi
+
+printf 'IDENTITY-CREDENTIALS named=1 set_exact=1 generic_rejected=1 effects=0\n'
+pass identity-named-credentials
