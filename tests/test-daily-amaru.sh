@@ -202,6 +202,7 @@ run_hermetic_case() {
   env \
     PATH="$hermetic_dir/bin" \
     DAILY_AMARU_FAKE_GH_LOG="$hermetic_effects" \
+    DAILY_AMARU_EFFECT_LOG="$hermetic_effects" \
     DAILY_AMARU_MODE=production \
     "${day_env[@]}" \
     DAILY_AMARU_IDENTITY=seed-non-empty-identity \
@@ -908,3 +909,51 @@ reject_mutant controller-pre-date.yaml "$workflow" \
   receipt_publication_holds
 printf 'RECEIPT-PUBLICATION controller_always=1 missing_artifact=fatal\n'
 pass scheduled-receipt-always-published
+
+# INV-213-E01 / INV-213-E02 / INV-213-E03 / INV-213-E04:
+# Effect-stream discriminability: positive controls on gh and non-gh transport,
+# negative control on early transport before boundary, and negative control on disabled logger.
+
+# Positive controls for gh and non-gh transport operations.
+gh_probe="$tmp_root/gh-positive.probe"
+: >"$gh_probe"
+DAILY_AMARU_FAKE_GH_LOG="$gh_probe" "$fake_gh" api repos/example >/dev/null
+[ -s "$gh_probe" ] && grep -Fq 'gh api repos/example' "$gh_probe" ||
+  fail 'fake-gh positive control probe failed to record gh operation'
+
+transport_probe="$tmp_root/transport-positive.probe"
+: >"$transport_probe"
+DAILY_AMARU_EFFECT_LOG="$transport_probe" "$transport" preflight gh git jq rg sed awk grep tail tr head seq sleep date docker nix >/dev/null 2>&1 || true
+[ -s "$transport_probe" ] && grep -Fq 'transport preflight' "$transport_probe" ||
+  fail 'transport effect logger positive control failed to record non-gh operation'
+
+# Negative control: disabling the logger must fail the positive probe.
+disabled_probe="$tmp_root/disabled-logger.probe"
+: >"$disabled_probe"
+disabled_mutant="$tmp_root/fake-gh-disabled.sh"
+sed 's|} >>"$log_file"|} >/dev/null # effect-stream-logger-disabled|' "$fake_gh" >"$disabled_mutant"
+chmod +x "$disabled_mutant"
+DAILY_AMARU_FAKE_GH_LOG="$disabled_probe" "$disabled_mutant" api repos/example >/dev/null
+if [ -s "$disabled_probe" ]; then
+  fail 'disabled logger mutant unexpectedly recorded to probe'
+fi
+
+# Negative control: early transport before boundary must be observable in effect stream.
+early_mutant="$tmp_root/controller-early-transport.sh"
+awk '
+  { print }
+  $0 == "[ -n \"${DAILY_AMARU_DAY:-}\" ] || bootstrap_command_census+=(date)" {
+    print "if command -v bash >/dev/null 2>&1; then"
+    print "  early_transport=\"${BASH_SOURCE[0]%/*}/daily-amaru-github.sh\""
+    print "  \"$early_transport\" preflight >/dev/null 2>&1 || true"
+    print "fi # effect-stream-early-transport"
+  }
+' "$controller" >"$early_mutant"
+chmod +x "$early_mutant"
+run_hermetic_case early-transport-check '' 2026-08-02 "$early_mutant"
+grep -Fq 'transport preflight' "$hermetic_effects" ||
+  fail 'early transport before boundary was not recorded in the effect stream'
+
+printf 'EFFECT-STREAM gh=1 non_gh=1 positive_control=1 logger_required=1\n'
+pass effect-stream-discriminability
+
