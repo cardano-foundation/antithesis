@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Check out the exact candidate
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Exercise the controller through the fake transport
         run: tests/test-daily-amaru.sh
 
@@ -29,22 +31,66 @@ jobs:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    # Exactly what the transport's same-repository operations declare they need.
     permissions:
       actions: write
-      contents: read
+      checks: read
+      contents: write
       issues: write
       pull-requests: write
     env:
       GH_TOKEN: ${{ github.token }}
-      DAILY_AMARU_IDENTITY: ${{ secrets.DAILY_AMARU_CROSS_REPO_TOKEN }}
       DAILY_AMARU_MODE: production
+      DAILY_AMARU_STATE_DIR: ${{ runner.temp }}/daily-amaru
+      DAILY_AMARU_RECEIPT: ${{ runner.temp }}/daily-amaru/receipt
     steps:
       - name: Check out exact main
         uses: actions/checkout@v6
-      - name: Run the once-daily state machine
+
+      # The controller's preflight fails loudly if this ever regresses.
+      - name: Provision the scheduled dependency census
         run: |
           set -euo pipefail
-          export DAILY_AMARU_DAY="$(date -u +%F)"
-          export DAILY_AMARU_STATE_DIR="$RUNNER_TEMP/daily-amaru"
-          export DAILY_AMARU_RECEIPT="$RUNNER_TEMP/daily-amaru/receipt"
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ripgrep
+      - uses: paolino/dev-assets/setup-nix@v0.0.1
+        with:
+          cachix-auth-token: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+
+      # An absent input or failed mint must still reach the controller with an
+      # empty identity, so the failure is a stage, not a skipped setup step.
+      - name: Mint the dedicated bootstrap App identity
+        id: app-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.DAILY_AMARU_APP_ID }}
+          private-key: ${{ secrets.DAILY_AMARU_APP_PRIVATE_KEY }}
+          owner: lambdasistemi
+          repositories: amaru-bootstrap
+          permission-actions: read
+          permission-checks: read
+          permission-contents: write
+          permission-pull-requests: write
+          permission-metadata: read
+
+      # Always reached: a failed dependency or mint step must become a
+      # classified receipt, not a skipped controller. The controller derives
+      # the UTC day itself, so no external command stands before that boundary.
+      - name: Run the once-daily state machine
+        if: always()
+        env:
+          DAILY_AMARU_IDENTITY: ${{ steps.app-token.outputs.token }}
+          DAILY_AMARU_APP_ID: ${{ vars.DAILY_AMARU_APP_ID }}
+          DAILY_AMARU_APP_PRIVATE_KEY: ${{ secrets.DAILY_AMARU_APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
           scripts/daily-amaru.sh
+
+      - name: Publish the local decision receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: daily-amaru-receipt-${{ github.run_id }}
+          path: ${{ runner.temp }}/daily-amaru/receipt
+          if-no-files-found: error
