@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ -n "${DAILY_AMARU_EFFECT_LOG:-}" ]; then
+  {
+    printf 'transport'
+    if [ "$#" -gt 0 ]; then
+      printf ' %s' "$@"
+    fi
+    printf '\n'
+  } >>"$DAILY_AMARU_EFFECT_LOG"
+fi
+
 repository=${DAILY_AMARU_REPOSITORY:-${GITHUB_REPOSITORY:-cardano-foundation/cardano-node-antithesis}}
 receipt_issue=${DAILY_AMARU_RECEIPT_ISSUE:-210}
 state_dir=${DAILY_AMARU_STATE_DIR:?DAILY_AMARU_STATE_DIR is required}
