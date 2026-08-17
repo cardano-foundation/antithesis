@@ -40,9 +40,52 @@ x-cardano-relay: &cardano-relay
     tracer-sidecar:
       condition: service_started
 
+x-dingo-env: &dingo-env
+  CARDANO_NETWORK: devnet
+  CARDANO_CONFIG: /configs/configs/config.json
+  CARDANO_TOPOLOGY: /configs/configs/topology.json
+  CARDANO_DATABASE_PATH: /data/db
+  CARDANO_BIND_ADDR: 0.0.0.0
+  CARDANO_RELAY_PORT: "3001"
+  CARDANO_SOCKET_PATH: /ipc/dingo.socket
+
+x-dingo: &dingo
+  image: ghcr.io/blinklabs-io/dingo:0.68.0
+  command:
+    - serve
+    - --logging-level
+    - warn
+  # Configurator writes pool keys as root; Dingo needs to read p5 keys.
+  user: "0:0"
+  environment:
+    <<: *dingo-env
+  restart: always
+  depends_on:
+    configurator:
+      condition: service_completed_successfully
+  healthcheck:
+    test:
+      - CMD
+      - cardano-cli
+      - ping
+      - --magic
+      - "42"
+      - --host
+      - 127.0.0.1
+      - --port
+      - "3001"
+      - --tip
+      - --quiet
+      - -c1
+    interval: 10s
+    timeout: 5s
+    retries: 12
+    start_period: 30s
+
 services:
   configurator:
     image: ghcr.io/cardano-foundation/cardano-node-antithesis/configurator@sha256:6e6ba428838bf754ad286b62a151c63c683ef27fbdd5dd1bb5bab11ec9a6a34d
+    platform: linux/amd64
     container_name: configurator
     volumes:
       - ./testnet.yaml:/testnet.yaml #  source of configurations
@@ -50,6 +93,7 @@ services:
       - p2-configs:/configs/2 # configs for p2
       - p3-configs:/configs/3 # configs for p3
       - p4-configs:/configs/4 # configs for p4
+      - p5-configs:/configs/5 # configs for p5
       - utxo-keys:/utxo-keys # funded address keys for tx-generator
 
   tracer:
@@ -103,6 +147,22 @@ services:
       - p4-configs:/configs:ro
       - tracer:/tracer
 
+  p5:
+    <<: *dingo
+    container_name: p5
+    hostname: p5.example
+    environment:
+      <<: *dingo-env
+      CARDANO_BLOCK_PRODUCER: "true"
+      CARDANO_SHELLEY_VRF_KEY: /configs/keys/vrf.skey
+      CARDANO_SHELLEY_KES_KEY: /configs/keys/kes.skey
+      CARDANO_SHELLEY_OPERATIONAL_CERTIFICATE: /configs/keys/opcert.cert
+    volumes:
+      - p5-configs:/configs:ro
+      - ./p5-topology.json:/configs/configs/topology.json:ro
+      - p5-state:/data/db
+      - p5-ipc:/ipc
+
   relay1:
     <<: *cardano-relay
     image: ghcr.io/intersectmbo/cardano-node@sha256:c3cbc5aa0b758ba211567791539a67001e661fbe7a09275e37449e8b1252c4b2
@@ -136,17 +196,30 @@ services:
       - relay3-state:/state
       - tracer:/tracer
 
+  relay4:
+    <<: *dingo
+    container_name: relay4
+    hostname: relay4.example
+    environment:
+      <<: *dingo-env
+      CARDANO_BLOCK_PRODUCER: "false"
+    volumes:
+      - p1-configs:/configs:ro
+      - ./relay-topology.json:/configs/configs/topology.json:ro
+      - relay4-state:/data/db
+      - relay4-ipc:/ipc
+
   # Tx-generator workload — promoted from cardano_node_tx_generator
   # after a 0-findings 1h Antithesis validation run on commit
   # 4687a09. The daemon connects to relay1 via N2C and the
   # composer fires short `transact`, `refill`, and `eventually`
-  # control-socket probes. Tag d864ccf moves the end-of-run summary
-  # probe from `finally_` to `eventually_` (#171) — `finally_` commands
-  # stopped running to completion at cfg=56; the bounded socket-probe
-  # wrapper that cleared the earlier "zero exit code" findings is
-  # retained.
+  # control-socket probes. Tag bf48615 includes the d864ccf move of the
+  # end-of-run summary probe from `finally_` to `eventually_` (#171)
+  # and ships flock for the composer wrappers; `finally_` commands
+  # stopped running to completion at cfg=56.
   tx-generator:
     image: ghcr.io/cardano-foundation/cardano-node-antithesis/tx-generator:bf48615
+    platform: linux/amd64
     container_name: tx-generator
     hostname: tx-generator.example
     labels:
@@ -178,10 +251,11 @@ services:
 
   sidecar:
     image: ghcr.io/cardano-foundation/cardano-node-antithesis/sidecar:1ff6913
+    platform: linux/amd64
     environment:
       NETWORKMAGIC: 42
       PORT: 3001
-      POOLS: "4"
+      POOLS: "5"
     container_name: sidecar
     hostname: sidecar.example
     labels:
@@ -195,6 +269,7 @@ services:
 
   tracer-sidecar:
     image: ghcr.io/cardano-foundation/cardano-node-antithesis/tracer-sidecar:5271661
+    platform: linux/amd64
     container_name: tracer-sidecar
     hostname: tracer-sidecar.example
     labels:
@@ -213,6 +288,7 @@ services:
 
   log-tailer:
     image: ghcr.io/cardano-foundation/cardano-node-antithesis/log-tailer@sha256:a5d23c42408a1003bb14208fd97dd2bdda102e7002e4e2a2804e71a80df56484
+    platform: linux/amd64
     container_name: log-tailer
     hostname: log-tailer.example
     volumes:
@@ -228,10 +304,10 @@ services:
   # chain via N2C, exposes ready/utxos_at/await on /tmp/idx.sock;
   # composer scripts at /opt/antithesis/test/v1/asteria-game/ drive
   # bootstrap (one-shot serial driver), the player loop, and the
-  # admin-singleton / consistency invariant snapshots. Tag d864ccf
-  # moves the end-of-run liveness + consistency snapshots from
-  # `finally_` to `eventually_` (#171), which run to completion at
-  # cfg=56 where `finally_` no longer does. The player
+  # admin-singleton / consistency invariant snapshots. Tag bf48615
+  # includes the d864ccf move of the end-of-run liveness + consistency
+  # snapshots from `finally_` to `eventually_` (#171) and ships flock
+  # for the composer wrappers. The player
   # parallel_driver_ is the workload generator: builds + signs +
   # submits spawnShip txs against relay1 every tick, providing
   # sustained tx pressure under fault injection.
@@ -246,6 +322,7 @@ services:
   # same applied validators.
   asteria-game:
     image: ghcr.io/cardano-foundation/cardano-node-antithesis/asteria-game:bf48615
+    platform: linux/amd64
     container_name: asteria-game
     hostname: asteria-game.example
     labels:
@@ -271,9 +348,14 @@ volumes:
   p2-configs:
   p3-configs:
   p4-configs:
+  p5-configs:
+  p5-state:
+  p5-ipc:
   relay1-state:
   relay2-state:
   relay3-state:
+  relay4-state:
+  relay4-ipc:
   utxo-keys:
   asteria-game-db:
   asteria-deploy:

@@ -1,0 +1,14 @@
+{
+  "localRoots": [
+    {
+      "accessPoints": [
+        {"address": "p4.example", "port": 3001}
+      ],
+      "advertise": true,
+      "trustable": true,
+      "valency": 1
+    }
+  ],
+  "publicRoots": [],
+  "useLedgerAfterSlot": 0
+}

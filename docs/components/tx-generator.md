@@ -231,12 +231,14 @@ The composer assertions surface two classes of finding:
 
 ## Validation evidence
 
-The tx-generator image promoted to
-[`cardano_node_master`](../testnets/cardano-node-master.md) is
+The tx-generator image originally promoted to
+[`cardano_node_master`](../testnets/cardano-node-master.md) was
 `tx-generator:69bf815`, referenced from downstream commit `4687a09`.
 It was validated on a dedicated `cardano_node_tx_generator` testnet
 before promotion (since removed; the workload now lives directly in
-`cardano_node_master`).
+`cardano_node_master`). The active `cardano_node_master` image pin is
+`tx-generator:bf48615`, which includes the later composer-wrapper
+fixes from `d864ccf` and `bf48615`.
 
 | Evidence | Value |
 |----------|-------|

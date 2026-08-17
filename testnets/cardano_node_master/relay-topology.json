@@ -5,11 +5,12 @@
         {"address": "p1.example", "port": 3001},
         {"address": "p2.example", "port": 3001},
         {"address": "p3.example", "port": 3001},
-        {"address": "p4.example", "port": 3001}
+        {"address": "p4.example", "port": 3001},
+        {"address": "p5.example", "port": 3001}
       ],
       "advertise": false,
       "trustable": true,
-      "valency": 4
+      "valency": 5
     }
   ],
   "publicRoots": [],
