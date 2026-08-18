@@ -79,3 +79,41 @@ format:
     #!/usr/bin/env bash
     set -euo pipefail
     nixfmt *.nix
+
+# check nix formatting without rewriting sources
+format-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    nixfmt --check *.nix
+
+### Verification Commands ###
+
+# validate the Actions expression contexts of every tracked workflow
+check-workflows:
+    ./scripts/check-github-actions.sh
+
+# shellcheck the maintained shell surface
+check-shell:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # `old-broken/` and `tools/` carry pre-existing diagnostics and are not
+    # part of this surface; the census is printed so it cannot shrink unnoticed.
+    mapfile -t sources < <(git ls-files 'scripts/*.sh' 'tests/*.sh' | sort -u)
+    if [ "${#sources[@]}" -eq 0 ]; then
+        echo 'SHELL-ANALYSIS-ERROR empty shell census' >&2
+        exit 1
+    fi
+    printf 'shell-census %s\n' "${sources[@]}"
+    shellcheck -x "${sources[@]}"
+    printf 'SHELL-ANALYSIS count=%d status=pass\n' "${#sources[@]}"
+
+# focused proof for the repository-wide workflow validation
+test-workflow-validation:
+    ./tests/test-workflow-validation.sh
+
+# focused proof for the Daily Amaru controller
+test-daily-amaru:
+    ./tests/test-daily-amaru.sh
+
+# complete local CI: no Docker, no network, no credentials
+ci: check-workflows check-shell format-check test-workflow-validation test-daily-amaru

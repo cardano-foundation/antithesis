@@ -1,0 +1,13 @@
+# Baselines for `scripts/check-github-actions.sh`.
+#
+# Every entry is path-specific and quotes the exact diagnostic it accepts. This
+# file must never disable a diagnostic class repository-wide: the incident it
+# exists beside is a `runner` lookup in a job-level mapping (issue #219), and
+# `tests/test-workflow-validation.sh` restores that exact defect with this
+# baseline in place to prove it still goes red.
+paths:
+  .github/workflows/publish-images.yaml:
+    ignore:
+      # Pre-existing workflow_dispatch compatibility lookups that GitHub
+      # accepts; guarded by the `|| ''` fallback beside each of them.
+      - 'property "ref_name" is not defined in object type \{\}'

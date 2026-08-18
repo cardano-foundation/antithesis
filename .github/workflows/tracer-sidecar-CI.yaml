@@ -71,6 +71,11 @@ jobs:
       - uses: paolino/dev-assets/setup-nix@v0.0.1
         with:
           cachix-auth-token: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+      # Runs from the repository root, before the component checks: a workflow
+      # GitHub cannot evaluate creates zero jobs, so this required context is
+      # the only place the whole census is observed.
+      - name: Validate GitHub Actions workflows
+        run: nix develop --quiet -c just check-workflows
       - name: Check Formatting
         working-directory: ./components/tracer-sidecar
         run: nix develop .#quality -c just format

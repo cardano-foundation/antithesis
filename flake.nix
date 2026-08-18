@@ -27,6 +27,9 @@
                 pkgs.just
                 pkgs.nixfmt-classic
                 pkgs.shellcheck
+                # Pinned by flake.lock, so `just check-workflows` validates
+                # with the same validator locally and in required CI.
+                pkgs.actionlint
                 pkgs.mkdocs
                 mkdocs-pkgs.mkdocs-packages
                 mkdocs-pkgs.mkdocs-asciinema-player

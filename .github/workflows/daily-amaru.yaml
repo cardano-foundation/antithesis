@@ -38,11 +38,12 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+    # `runner` values exist only once a runner has been allocated. A job-level
+    # mapping is evaluated before that, so runner-local paths are bound one
+    # level deeper, on the steps that actually use them.
     env:
       GH_TOKEN: ${{ github.token }}
       DAILY_AMARU_MODE: production
-      DAILY_AMARU_STATE_DIR: ${{ runner.temp }}/daily-amaru
-      DAILY_AMARU_RECEIPT: ${{ runner.temp }}/daily-amaru/receipt
     steps:
       - name: Check out exact main
         uses: actions/checkout@v6
@@ -83,6 +84,8 @@ jobs:
           DAILY_AMARU_IDENTITY: ${{ steps.app-token.outputs.token }}
           DAILY_AMARU_APP_ID: ${{ vars.DAILY_AMARU_APP_ID }}
           DAILY_AMARU_APP_PRIVATE_KEY: ${{ secrets.DAILY_AMARU_APP_PRIVATE_KEY }}
+          DAILY_AMARU_STATE_DIR: ${{ runner.temp }}/daily-amaru
+          DAILY_AMARU_RECEIPT: ${{ runner.temp }}/daily-amaru/receipt
         run: |
           set -euo pipefail
           scripts/daily-amaru.sh
