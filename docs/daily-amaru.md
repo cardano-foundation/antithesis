@@ -19,6 +19,20 @@ success is `error=malformed-dependency-evidence`. Each transport operation
 declares only the commands it uses, so publishing a failure receipt never
 depends on the command whose absence it reports.
 
+## Runner allocation boundary
+
+`runner` values exist only after GitHub has allocated a runner for a job.
+GitHub evaluates a job's own `env:` mapping *before* that allocation, so
+`${{ runner.temp }}` written there is not merely empty — it is rejected, and
+the whole workflow file produces zero jobs. Nothing else in CI observes that:
+a run with no jobs has no failing job to report, so every other required
+context stays green while the schedule silently never ran.
+
+The scheduled job therefore binds `DAILY_AMARU_STATE_DIR` and
+`DAILY_AMARU_RECEIPT` on the step that uses them, not on the job. The values
+are unchanged — `$RUNNER_TEMP/daily-amaru` and its `receipt` child — and the
+receipt upload keeps its own step-scoped `${{ runner.temp }}` lookup.
+
 ## Bootstrap App identity
 
 Production mints a short-lived token from a dedicated GitHub App, named by
@@ -110,3 +124,25 @@ non-persistence, and the token grant/use seam, counts the effects both broken
 preconditions reach, and checks that CI executably calls this suite while the
 schedule calls the controller. Every instrument carries controls proving it can
 fail.
+
+Validate every tracked workflow in the repository, which is the same command
+the merge-required `Check code quality` context runs:
+
+```console
+nix develop --quiet -c just check-workflows
+```
+
+It enumerates every tracked `.github/workflows/*.yaml` and `*.yml` file, prints
+the census and its count, refuses an empty census, and validates the expression
+contexts with the `flake.lock`-pinned actionlint. Baselines in
+`.github/actionlint.yaml` are path-specific and quote the exact pre-existing
+diagnostic they accept; none of them can suppress the `runner`-at-job-level
+class.
+
+Run the complete local gate — workflow validation, shell analysis, formatting,
+and both focused proofs, none of which need Docker, network, or credentials —
+with:
+
+```console
+nix develop --quiet -c just ci
+```

@@ -4,20 +4,20 @@ Artifact ceiling: 3,500 bytes and 90 lines.
 
 ## Slice S219-01 — Evaluation repair and permanent workflow guard
 
-- [ ] **T2191** Commit and preserve an executable RED proof that actionlint
+- [x] **T2191** Commit and preserve an executable RED proof that actionlint
   rejects both exact merged `${{ runner.temp }}` scheduled-job-env bindings.
-- [ ] **T2192** Initialize Daily Amaru state and receipt paths only after runner
+- [x] **T2192** Initialize Daily Amaru state and receipt paths only after runner
   allocation while preserving their values and all controller semantics.
-- [ ] **T2193** Add the pinned repository-wide Actions validator with complete
+- [x] **T2193** Add the pinned repository-wide Actions validator with complete
   `.yaml`/`.yml` enumeration, positive census evidence, narrow documented
   legacy baselines, and a non-zero empty-census result.
-- [ ] **T2194** Wire the validator into the required `Check code quality`
+- [x] **T2194** Wire the validator into the required `Check code quality`
   context and the complete local CI command; prove the exact defect, empty
   census, and orphaned required-job caller are red.
-- [ ] **T2195** Keep the full Daily Amaru controller and named-credential
+- [x] **T2195** Keep the full Daily Amaru controller and named-credential
   controls green and document why runner-scoped paths are initialized only
   after allocation.
-- [ ] **T2196** Pass the frozen gate, complete local gate, fresh independent
+- [x] **T2196** Pass the frozen gate, complete local gate, fresh independent
   audit, final tree/diff checks, exact-head hosted Daily Amaru job census, and
   all six required contexts without App/secret setup, live dispatch, spend,
   merge, or production execution.
