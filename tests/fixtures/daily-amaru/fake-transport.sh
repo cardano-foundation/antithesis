@@ -118,9 +118,12 @@ case "$operation" in
 
   propose-bootstrap)
     sha=${1:?upstream SHA is required}
+    # Same expansion as production: observe the day, never synthesize one.
+    day=${DAILY_AMARU_DAY:?DAILY_AMARU_DAY is required}
     # The minted bootstrap identity travels in the process environment only, so
     # the log records its presence and never its value.
     log mutation:bootstrap "$sha" "$(identity_marker)"
+    log observed-day propose-bootstrap "$day"
     if [ "$scenario" = failed-stage ]; then
       printf 'bootstrap proposal failed\n' >&2
       exit 1
@@ -142,7 +145,10 @@ case "$operation" in
 
   prepare-consumer-repin)
     image=${1:?image is required}
+    # Same expansion as production: observe the day, never synthesize one.
+    day=${DAILY_AMARU_DAY:?DAILY_AMARU_DAY is required}
     log mutation:repin "$image"
+    log observed-day prepare-consumer-repin "$day"
     printf '%s\n' "$consumer_sha"
     ;;
 

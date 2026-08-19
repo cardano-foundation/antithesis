@@ -146,6 +146,9 @@ receipt[day]=$day
 [[ "$day" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] ||
   die "invalid UTC day: $day"
 
+# Publish the validated day before any transport child is forked.
+export DAILY_AMARU_DAY=$day
+
 [ -x "$transport" ] || die "transport is not executable: $transport"
 mkdir -p "$state_dir"
 

@@ -1038,3 +1038,312 @@ grep -Fq 'error=missing-credentials-' "$repo_root/docs/daily-amaru.md" ||
 
 printf 'CREDENTIAL-BINDING workflow=1 tuple=1 docs=1\n'
 pass credential-binding-contract
+
+# INV-221: the scheduled shape never injects a day. Existing cases all set
+# DAILY_AMARU_DAY, so they cannot see a child that does not inherit $day.
+#
+# The expected day is assembled at runtime from components so it is not a
+# YYYY-MM-DD literal in this file or in the controller. A controller that
+# hardcodes a harness-known constant therefore cannot match it.
+real_utc_day=$(date -u +%F)
+omitted_day_y=1999
+omitted_day_m=6
+omitted_day_d=12
+omitted_day_fake=
+while [ -z "$omitted_day_fake" ]; do
+  trial=$(printf '%04d-%02d-%02d' "$omitted_day_y" "$omitted_day_m" "$omitted_day_d")
+  if [ "$trial" != "$real_utc_day" ] &&
+    ! grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' \
+      "$controller" \
+      "$repo_root/tests/test-daily-amaru.sh" \
+      "$repo_root/tests/fixtures/daily-amaru/fake-transport.sh" |
+      grep -qxF "$trial"; then
+    omitted_day_fake=$trial
+  else
+    omitted_day_d=$((omitted_day_d + 1))
+    [ "$omitted_day_d" -le 28 ] ||
+      fail 'could not assemble a derived-day nonce absent from the suite'
+  fi
+done
+
+fake_date_bin="$tmp_root/fake-date-bin"
+fake_date_log="$tmp_root/fake-date-invocations"
+mkdir -p "$fake_date_bin"
+: >"$fake_date_log"
+real_date=$(command -v date)
+[ -x "$real_date" ] || fail 'cannot resolve the real date binary'
+# shellcheck disable=SC2016
+cat >"$fake_date_bin/date" <<EOF
+#!/bin/sh
+if [ "\$#" -eq 2 ] && [ "\$1" = -u ] && [ "\$2" = +%F ]; then
+  printf 'date -u +%%F -> %s\n' '$omitted_day_fake' >>'$fake_date_log'
+  printf '%s\n' '$omitted_day_fake'
+  exit 0
+fi
+exec '$real_date' "\$@"
+EOF
+chmod +x "$fake_date_bin/date"
+fake_date_out=$(PATH="$fake_date_bin:$PATH" date -u +%F)
+[ "$fake_date_out" = "$omitted_day_fake" ] ||
+  fail "fake date returned $fake_date_out, not $omitted_day_fake"
+[ "$(date -u +%F)" = "$real_utc_day" ] ||
+  fail 'real date is no longer the system UTC day'
+# The probe above proves the binary works. It does not prove the controller
+# invoked it; that is observed per run from fake_date_log.
+
+# The production expansion is compared as a literal, not expanded here.
+# shellcheck disable=SC2016
+day_bind='${DAILY_AMARU_DAY:?DAILY_AMARU_DAY is required}'
+operations_requiring_day() {
+  local file=$1 operation body
+  while IFS= read -r operation; do
+    [ -n "$operation" ] || continue
+    body=$(transport_branch "$file" "$operation")
+    [ -n "$body" ] || continue
+    if grep -Fq -- "$day_bind" <<<"$body"; then
+      printf '%s\n' "$operation"
+    fi
+  done < <(grep -E '^  [a-z0-9-]+\)$' "$file" | sed 's/^  //; s/)$//')
+}
+
+mapfile -t prod_day_ops < <(operations_requiring_day "$transport" | sort -u)
+mapfile -t fix_day_ops < <(operations_requiring_day "$fake_transport" | sort -u)
+required_ops=${#prod_day_ops[@]}
+matched=0
+if [ "$required_ops" -ge 2 ] &&
+  [ "${#fix_day_ops[@]}" -eq "$required_ops" ] &&
+  [ "${prod_day_ops[*]}" = "${fix_day_ops[*]}" ]; then
+  matched=1
+fi
+printf 'DAY-FIXTURE-RECONCILIATION required_ops=%s matched=%s\n' \
+  "$required_ops" "$matched"
+# Negative control: dropping the production expansion must unmatch.
+fixture_day_mutant="$tmp_root/fake-transport-no-day.sh"
+# Delete only the production expansion; leave every other arm intact.
+sed '/DAILY_AMARU_DAY:?DAILY_AMARU_DAY is required/d' \
+  "$fake_transport" >"$fixture_day_mutant"
+grep -Fq -- "$day_bind" "$fake_transport" ||
+  fail 'fixture does not contain the production day expansion'
+! grep -Fq -- "$day_bind" "$fixture_day_mutant" ||
+  fail 'fixture day-bind mutation did not apply'
+mapfile -t fix_mut_ops < <(operations_requiring_day "$fixture_day_mutant" | sort -u)
+[ "${prod_day_ops[*]}" != "${fix_mut_ops[*]}" ] ||
+  fail 'reconciliation cannot detect a fixture that dropped the day bind'
+[ "$required_ops" -ge 2 ] && [ "$matched" -eq 1 ] ||
+  fail "fixture day requirement does not match production: prod=[${prod_day_ops[*]}] fixture=[${fix_day_ops[*]}]"
+pass day-fixture-reconciliation
+
+run_omitted_day_case() {
+  local label=$1 scenario=$2 script=${3:-$controller}
+  case_name=$label
+  case_number=$((case_number + 1))
+  case_dir="$tmp_root/$case_number-$case_name"
+  case_state="$case_dir/state"
+  case_log="$case_dir/transport.log"
+  case_receipt="$case_dir/receipt"
+  case_stdout="$case_dir/stdout"
+  case_stderr="$case_dir/stderr"
+  case_effects="$case_dir/effects"
+  mkdir -p "$case_state"
+  : >"$case_log"
+  : >"$case_effects"
+  : >"$fake_date_log"
+  case_rc=0
+  env -u DAILY_AMARU_DAY \
+    PATH="$fake_date_bin:$PATH" \
+    FAKE_SCENARIO="$scenario" \
+    FAKE_LOG="$case_log" \
+    DAILY_AMARU_TRANSPORT="$fake_transport" \
+    DAILY_AMARU_MODE=test \
+    DAILY_AMARU_IDENTITY=test-identity \
+    DAILY_AMARU_STATE_DIR="$case_state" \
+    DAILY_AMARU_RECEIPT="$case_receipt" \
+    DAILY_AMARU_ALLOW_REAL=1 \
+    "$bash_binary" "$script" \
+    >"$case_stdout" 2>"$case_stderr" || case_rc=$?
+}
+
+receipt_day() {
+  if [ -f "$case_receipt" ]; then
+    sed -nE 's/^day=([0-9]{4}-[0-9]{2}-[0-9]{2})$/\1/p' "$case_receipt" |
+      head -1
+  fi
+}
+
+observed_day_for() {
+  sed -n "s/^observed-day $1 //p" "$case_log" | tail -n 1
+}
+
+fake_date_invocations() {
+  if [ -f "$fake_date_log" ]; then
+    grep -c 'date -u +%F' "$fake_date_log" || true
+  else
+    printf '0\n'
+  fi
+}
+
+observed_date_source() {
+  if [ "$(fake_date_invocations)" -ge 1 ]; then
+    printf 'fake-date\n'
+  else
+    printf 'uninvoked\n'
+  fi
+}
+
+# True only when the last omitted-day run used the fake date's output as
+# the derived day and the script under test does not contain that day as
+# a literal. A hardcoded default, a printf constant, or invoke-and-discard
+# cannot satisfy this.
+controller_used_fake_date() {
+  local script=$1
+  local day
+  day=$(receipt_day)
+  [ "$(fake_date_invocations)" -ge 1 ] || return 1
+  [ "$day" = "$omitted_day_fake" ] || return 1
+  ! grep -Fq -- "$omitted_day_fake" "$script" || return 1
+  return 0
+}
+
+# Family of hardcoded/default substitutions. Closing only
+# day=${DAILY_AMARU_DAY:-<known-literal>} is not enough.
+source_mutant_root="$tmp_root/source-mutants"
+mkdir -p "$source_mutant_root"
+rejected_source_mutants=0
+reject_source_mutant() {
+  local label=$1 script=$2 applied=$3 why=$4
+  local mutant="$source_mutant_root/$label"
+  sed "$script" "$controller" >"$mutant"
+  if [ "${applied:0:1}" = '!' ]; then
+    ! grep -Fq -- "${applied:1}" "$mutant" ||
+      fail "mutation did not apply: $label"
+  else
+    grep -Fq -- "$applied" "$mutant" || fail "mutation did not apply: $label"
+  fi
+  chmod +x "$mutant"
+  run_omitted_day_case "source-$label" changed "$mutant"
+  [ -n "$(receipt_day)" ] ||
+    fail "source mutant $label never produced a derived day"
+  if controller_used_fake_date "$mutant"; then
+    fail "source-use check accepted $why"
+  fi
+  rejected_source_mutants=$((rejected_source_mutants + 1))
+}
+
+# shellcheck disable=SC2016
+reject_source_mutant hardcoded-default \
+  's|^day=${DAILY_AMARU_DAY:-$(date -u +%F)}$|day=${DAILY_AMARU_DAY:-2024-11-05}|' \
+  'day=${DAILY_AMARU_DAY:-2024-11-05}' \
+  'a controller that defaults to a hardcoded day instead of date'
+# shellcheck disable=SC2016
+reject_source_mutant printf-default \
+  's|$(date -u +%F)|$(printf %s 2023-01-01)|' \
+  '$(printf %s 2023-01-01)' \
+  'a controller that substitutes a printf constant for date'
+# shellcheck disable=SC2016
+reject_source_mutant invoke-and-discard \
+  's|^day=${DAILY_AMARU_DAY:-$(date -u +%F)}$|day=${DAILY_AMARU_DAY:-$(date -u +%F >/dev/null; printf %s 2024-11-05)}|' \
+  'date -u +%F >/dev/null; printf %s 2024-11-05' \
+  'a controller that invokes date and then ignores its output'
+[ "$rejected_source_mutants" -eq 3 ] ||
+  fail "source-use family rejected $rejected_source_mutants mutants, expected 3"
+printf 'DAY-SOURCE-MUTANTS rejected=%s\n' "$rejected_source_mutants"
+pass omitted-day-source-use-family
+
+run_omitted_day_case omitted-day-success changed
+derived_day=$(receipt_day)
+propose_day=$(observed_day_for propose-bootstrap)
+repin_day=$(observed_day_for prepare-consumer-repin)
+injected_day=absent
+observed_source=$(observed_date_source)
+printf 'DAY-PROPAGATION derived_day=%s source=%s injected_day=%s propose-bootstrap=%s prepare-consumer-repin=%s\n' \
+  "${derived_day:-missing}" "$observed_source" "$injected_day" \
+  "${propose_day:-missing}" "${repin_day:-missing}"
+[ "$case_rc" -eq 0 ] ||
+  fail "omitted-day success failed: exit=$case_rc: $(tr '\n' ' ' <"$case_stderr")"
+controller_used_fake_date "$controller" ||
+  fail 'fake date was not used by the controller'
+[ "$observed_source" = fake-date ] ||
+  fail "fake date was not used by the controller (source=$observed_source)"
+[ "$derived_day" = "$omitted_day_fake" ] ||
+  fail "derived day ${derived_day:-missing} is not the fake date $omitted_day_fake"
+[ "$propose_day" = "$derived_day" ] ||
+  fail "propose-bootstrap observed ${propose_day:-missing}, not $derived_day"
+[ "$repin_day" = "$derived_day" ] ||
+  fail "prepare-consumer-repin observed ${repin_day:-missing}, not $derived_day"
+assert_log_count 1 '^mutation:bootstrap '
+assert_log_count 1 '^mutation:repin '
+assert_log_count 0 '^real-launch '
+pass omitted-day-propagation
+
+prop_mutant="$tmp_root/controller-no-day-export.sh"
+sed '/^export DAILY_AMARU_DAY=/d' "$controller" >"$prop_mutant"
+applied=0
+if grep -Eq '^export DAILY_AMARU_DAY=' "$controller" &&
+  ! grep -Eq '^export DAILY_AMARU_DAY=' "$prop_mutant"; then
+  applied=1
+fi
+run_omitted_day_case omitted-day-mutant changed "$prop_mutant"
+mutant_rejected=0
+fingerprint=absent
+mutant_stage=missing
+mutant_error=missing
+[ "$case_rc" -ne 0 ] && mutant_rejected=1
+if grep -Fq 'DAILY_AMARU_DAY: DAILY_AMARU_DAY is required' "$case_stderr"; then
+  fingerprint=matched
+fi
+if [ -f "$case_receipt" ]; then
+  mutant_stage=$(sed -nE 's/^stage=(.*)$/\1/p' "$case_receipt" | head -1)
+  mutant_error=$(sed -nE 's/^error=(.*)$/\1/p' "$case_receipt" | head -1)
+fi
+printf 'DAY-PROPAGATION-MUTANT applied=%s rejected=%s fingerprint=%s stage=%s error=%s\n' \
+  "$applied" "$mutant_rejected" "$fingerprint" "$mutant_stage" "$mutant_error"
+[ "$applied" -eq 1 ] && [ "$mutant_rejected" -eq 1 ] &&
+  [ "$fingerprint" = matched ] &&
+  [ "$mutant_stage" = bootstrap-proposal ] &&
+  [ "$mutant_error" = proposal-failed ] ||
+  fail 'remove-propagation mutant was not applied and rejected as production'
+pass omitted-day-propagation-mutant
+
+run_omitted_day_case omitted-day-failed-stage failed-stage
+derived_day=$(receipt_day)
+day_claim=0
+if [ -n "$derived_day" ] && [ -f "$case_state/day-claim" ] &&
+  grep -Fqx "$derived_day" "$case_state/day-claim"; then
+  day_claim=1
+fi
+mapfile -t receipt_stages < <(
+  sed -nE 's/^receipt .* stage=([^ ]+).*/\1/p' "$case_log"
+)
+stage_receipts=${#receipt_stages[@]}
+expected_stages=(day-claim resolve-upstream launch-attempt bootstrap-proposal)
+ordered=0
+if [ "$stage_receipts" -eq "${#expected_stages[@]}" ]; then
+  ordered=1
+  for i in "${!expected_stages[@]}"; do
+    [ "${receipt_stages[$i]}" = "${expected_stages[$i]}" ] || ordered=0
+  done
+fi
+real_launches=$(count_matches "$case_log" '^real-launch ')
+fake_launches=$(count_matches "$case_log" '^fake-launch ')
+printf 'DAY-RECEIPTS derived_day=%s day_claim=%s stage_receipts=%s ordered=%s real_launches=%s fake_launches=%s\n' \
+  "${derived_day:-missing}" "$day_claim" "$stage_receipts" "$ordered" \
+  "$real_launches" "$fake_launches"
+[ "$case_rc" -ne 0 ] || fail 'omitted-day failed-stage unexpectedly succeeded'
+[ "$derived_day" = "$omitted_day_fake" ] ||
+  fail "failure-path derived day ${derived_day:-missing} is not $omitted_day_fake"
+[ "$day_claim" -eq 1 ] ||
+  fail "issue #210 day claim is missing or not $derived_day"
+[ "$stage_receipts" -ge 1 ] || fail 'no stage receipts were published'
+[ "$ordered" -eq 1 ] ||
+  fail "stage receipts were dropped or reordered: ${receipt_stages[*]}"
+[ "$real_launches" -eq 0 ] && [ "$fake_launches" -eq 0 ] ||
+  fail "failure path reached a launcher: real=$real_launches fake=$fake_launches"
+receipt_oracle "$case_receipt" "$derived_day" bootstrap-proposal \
+  proposal-failed "$case_effects" ||
+  fail 'omitted-day failure receipt was not an honest failure'
+for forbidden in 'repo clone' 'pr create' 'pr merge' 'workflow run' 'run watch'; do
+  if grep -Fq -- "$forbidden" "$case_log" "$case_effects"; then
+    fail "omitted-day failure path reached a business effect: $forbidden"
+  fi
+done
+pass omitted-day-receipts-survive-failure
