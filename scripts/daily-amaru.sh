@@ -34,6 +34,12 @@ utc_day() {
   printf '%s' "$day"
 }
 
+# Builtin-only workflow head: resolve and validate it before the first
+# transport child so every later operation inherits one immutable value.
+workflow_head() {
+  printf '%s' "${DAILY_AMARU_HEAD:-${GITHUB_SHA:-}}"
+}
+
 case "$mode" in
   production | manual | pull_request | test) ;;
   *) die "unsupported mode: $mode" ;;
@@ -52,6 +58,7 @@ receipt[upstream_ref]=$ref
 
 receipt_keys=(
   day stage outcome error
+  workflow_head claim_supersedes launch_claim
   dependency_census
   upstream_origin upstream_ref upstream_sha
   bootstrap_candidate_sha image_ref
@@ -149,8 +156,43 @@ receipt[day]=$day
 # Publish the validated day before any transport child is forked.
 export DAILY_AMARU_DAY=$day
 
+head=$(workflow_head)
+if [ -z "$head" ]; then
+  fail_stage head-resolution unresolvable-head
+fi
+[[ "$head" =~ ^[0-9a-f]{40}$ ]] || fail_stage head-resolution malformed-head
+receipt[workflow_head]=$head
+export DAILY_AMARU_HEAD=$head
+
 [ -x "$transport" ] || die "transport is not executable: $transport"
 mkdir -p "$state_dir"
+
+claim_operation() {
+  local stage=$1 operation=$2 record_supersede=$3
+  local verdict reason previous_head
+  shift 3
+
+  verdict=''
+  if ! verdict=$(transport_call "$operation" "$@"); then
+    if [[ "$verdict" =~ ^BLOCKED\ ([a-z-]+)$ ]]; then
+      reason=${BASH_REMATCH[1]}
+    else
+      reason=malformed-claim-verdict
+    fi
+    fail_stage "$stage" "$reason"
+  fi
+
+  case "$verdict" in
+    CLAIMED) ;;
+    'SUPERSEDED previous-head='*)
+      previous_head=${verdict#SUPERSEDED previous-head=}
+      if [ "$record_supersede" = yes ]; then
+        receipt[claim_supersedes]=$previous_head
+      fi
+      ;;
+    *) fail_stage "$stage" malformed-claim-verdict ;;
+  esac
+}
 
 # The full census is checked before the UTC day is claimed, so a runner missing
 # a required command costs neither the day nor a business effect.
@@ -169,9 +211,7 @@ fi
   fail_stage runner-preflight malformed-dependency-evidence
 receipt[dependency_census]=$preflight_output
 
-if ! transport_call claim-day "$day"; then
-  fail_stage day-claim duplicate-day
-fi
+claim_operation day-claim claim-day yes "$day" "$head"
 write_receipt day-claim CLAIMED
 
 observation_output=''
@@ -228,9 +268,7 @@ fi
 # Process environment only: never a command-line argument any process can read.
 export DAILY_AMARU_IDENTITY=$identity
 
-if ! transport_call claim-sha-attempt "$observed_sha"; then
-  fail_stage launch-attempt sha-already-attempted
-fi
+claim_operation launch-attempt claim-sha-attempt no "$observed_sha" "$head"
 write_receipt launch-attempt CLAIMED
 
 bootstrap_sha=''
@@ -334,6 +372,9 @@ write_receipt supervised-integration VERIFIED
 
 launch_operation=fake-launch
 if [ "$mode" = production ]; then
+  claim_operation launch-cap claim-launch no "$day" "$head"
+  receipt[launch_claim]=consumed
+  write_receipt launch-cap CLAIMED
   launch_operation=real-launch
 fi
 

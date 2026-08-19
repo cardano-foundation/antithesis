@@ -13,6 +13,9 @@ integrated_sha=4444444444444444444444444444444444444444
 image_ref="ghcr.io/lambdasistemi/amaru-bootstrap-producer:${bootstrap_sha}@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 mkdir -p "$state_dir"
+markers_file=$state_dir/markers
+receipt_history=$state_dir/receipt-history
+touch "$markers_file" "$receipt_history"
 
 log() {
   printf '%s' "$1" >>"$log_file"
@@ -37,6 +40,67 @@ identity_marker() {
     printf 'identity-present'
   else
     printf 'identity-absent'
+  fi
+}
+
+validate_head() {
+  [[ "$1" =~ ^[0-9a-f]{40}$ ]] || {
+    printf 'invalid workflow head: %s\n' "$1" >&2
+    return 1
+  }
+}
+
+claim_prelaunch_marker() {
+  local kind=$1 value=$2 head=$3 line marker legacy_marker current_prefix
+  local previous_head='' recorded_head='' found=0
+
+  if [ "$scenario" = census-failure ]; then
+    printf 'BLOCKED census-unreadable\n'
+    return 1
+  fi
+  if [ "$kind" = day ]; then
+    while IFS= read -r line; do
+      if [[ "$line" =~ ^\<\!--\ daily-amaru\ day="$value"\ launch-consumed\ head=[0-9a-f]{40}\ --\>$ ]]; then
+        printf 'BLOCKED launch-consumed\n'
+        return 1
+      fi
+    done <"$markers_file"
+    legacy_marker="<!-- daily-amaru day=$value claim -->"
+    current_prefix="<!-- daily-amaru day=$value claim head="
+    marker="<!-- daily-amaru day=$value claim head=$head -->"
+  else
+    legacy_marker="<!-- daily-amaru attempted-sha=$value -->"
+    current_prefix="<!-- daily-amaru attempted-sha=$value head="
+    marker="<!-- daily-amaru attempted-sha=$value head=$head -->"
+  fi
+  while IFS= read -r line; do
+    if [ "$line" = "$legacy_marker" ]; then
+      found=1
+      previous_head=legacy
+      continue
+    fi
+    if [[ "$line" == "$current_prefix"*' -->' ]]; then
+      recorded_head=${line#"$current_prefix"}
+      recorded_head=${recorded_head%' -->'}
+      [[ "$recorded_head" =~ ^[0-9a-f]{40}$ ]] || continue
+      found=1
+      previous_head=$recorded_head
+      if [ "$recorded_head" = "$head" ]; then
+        printf 'BLOCKED unchanged-head\n'
+        return 1
+      fi
+    fi
+  done <"$markers_file"
+  printf '%s\n' "$marker" >>"$markers_file"
+  if [ "$kind" = day ]; then
+    printf '%s\n' "$value" >"$state_dir/day-claim"
+  else
+    printf '%s\n' "$value" >"$state_dir/attempted-sha"
+  fi
+  if [ "$found" -eq 0 ]; then
+    printf 'CLAIMED\n'
+  else
+    printf 'SUPERSEDED previous-head=%s\n' "$previous_head"
   fi
 }
 
@@ -66,12 +130,10 @@ case "$operation" in
 
   claim-day)
     day=${1:?day is required}
-    log claim-day "$day"
-    if [ -e "$state_dir/day-claim" ]; then
-      printf 'day already claimed\n' >&2
-      exit 1
-    fi
-    printf '%s\n' "$day" >"$state_dir/day-claim"
+    head=${2:?head is required}
+    validate_head "$head"
+    log claim-day "$day" "$head"
+    claim_prelaunch_marker day "$day" "$head"
     ;;
 
   resolve-upstream)
@@ -108,12 +170,26 @@ case "$operation" in
 
   claim-sha-attempt)
     sha=${1:?upstream SHA is required}
-    log claim-sha-attempt "$sha"
-    if [ -e "$state_dir/attempted-sha" ]; then
-      printf 'SHA already attempted\n' >&2
-      exit 1
-    fi
-    printf '%s\n' "$sha" >"$state_dir/attempted-sha"
+    head=${2:?head is required}
+    validate_head "$head"
+    log claim-sha-attempt "$sha" "$head"
+    claim_prelaunch_marker sha "$sha" "$head"
+    ;;
+
+  claim-launch)
+    day=${1:?day is required}
+    head=${2:?head is required}
+    validate_head "$head"
+    log claim-launch "$day" "$head"
+    while IFS= read -r line; do
+      if [[ "$line" =~ ^\<\!--\ daily-amaru\ day="$day"\ launch-consumed\ head=[0-9a-f]{40}\ --\>$ ]]; then
+        printf 'BLOCKED launch-consumed\n'
+        exit 1
+      fi
+    done <"$markers_file"
+    printf '<!-- daily-amaru day=%s launch-consumed head=%s -->\n' \
+      "$day" "$head" >>"$markers_file"
+    printf 'CLAIMED\n'
     ;;
 
   propose-bootstrap)
@@ -221,6 +297,8 @@ case "$operation" in
     log receipt "$@"
     : >"$receipt_file"
     printf '%s\n' "$@" >>"$receipt_file"
+    printf '%s\n' '--- receipt ---' >>"$receipt_history"
+    printf '%s\n' "$@" >>"$receipt_history"
     ;;
 
   *)
