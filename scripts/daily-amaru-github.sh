@@ -66,6 +66,68 @@ comment_issue() {
   gh issue comment "$receipt_issue" -R "$repository" --body "$1" >/dev/null
 }
 
+marker_census() {
+  issue_bodies
+}
+
+validate_head() {
+  [[ "$1" =~ ^[0-9a-f]{40}$ ]] || die "invalid workflow head: $1"
+}
+
+# Claim an append-only pre-launch marker. A successful census is captured
+# before it is searched, so a failed `gh` cannot masquerade as no match.
+claim_prelaunch_marker() {
+  local kind=$1 value=$2 head=$3 census line marker legacy_marker
+  local current_prefix previous_head='' recorded_head='' found=0
+
+  if ! census=$(marker_census); then # census-fails-closed
+    printf 'BLOCKED census-unreadable\n'
+    return 1
+  fi
+
+  if [ "$kind" = day ]; then
+    while IFS= read -r line; do
+      if [[ "$line" =~ ^\<\!--\ daily-amaru\ day="$value"\ launch-consumed\ head=[0-9a-f]{40}\ --\>$ ]]; then
+        printf 'BLOCKED launch-consumed\n'
+        return 1 # launch-consumed-final
+      fi
+    done <<<"$census"
+    legacy_marker="<!-- daily-amaru day=$value claim -->"
+    current_prefix="<!-- daily-amaru day=$value claim head="
+    marker="<!-- daily-amaru day=$value claim head=$head -->"
+  else
+    legacy_marker="<!-- daily-amaru attempted-sha=$value -->"
+    current_prefix="<!-- daily-amaru attempted-sha=$value head="
+    marker="<!-- daily-amaru attempted-sha=$value head=$head -->"
+  fi
+
+  while IFS= read -r line; do
+    if [ "$line" = "$legacy_marker" ]; then
+      found=1
+      previous_head=legacy
+      continue
+    fi
+    if [[ "$line" == "$current_prefix"*' -->' ]]; then
+      recorded_head=${line#"$current_prefix"}
+      recorded_head=${recorded_head%' -->'}
+      [[ "$recorded_head" =~ ^[0-9a-f]{40}$ ]] || continue
+      found=1
+      previous_head=$recorded_head
+      if [ "$recorded_head" = "$head" ]; then # unchanged-head-guard
+        printf 'BLOCKED unchanged-head\n'
+        return 1
+      fi
+    fi
+  done <<<"$census"
+
+  comment_issue "$marker"
+  if [ "$found" -eq 0 ]; then
+    printf 'CLAIMED\n'
+  else
+    printf 'SUPERSEDED previous-head=%s\n' "$previous_head"
+  fi
+}
+
 with_identity() {
   local identity=$1
   shift
@@ -143,11 +205,10 @@ case "$operation" in
     # repository-token-permissions: issues=write
     require_commands gh grep
     day=${1:?day is required}
-    marker="<!-- daily-amaru day=$day claim -->"
-    if issue_bodies | grep -Fqx -- "$marker"; then
-      die "UTC day already claimed: $day"
-    fi
-    comment_issue "$marker"
+    head=${2:?head is required}
+    [[ "$day" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || die "invalid UTC day: $day"
+    validate_head "$head"
+    claim_prelaunch_marker day "$day" "$head"
     ;;
 
   resolve-upstream)
@@ -172,11 +233,31 @@ case "$operation" in
     # repository-token-permissions: issues=write
     require_commands gh grep
     sha=${1:?upstream SHA is required}
-    marker="<!-- daily-amaru attempted-sha=$sha -->"
-    if issue_bodies | grep -Fqx -- "$marker"; then
-      die "upstream SHA already attempted: $sha"
+    head=${2:?head is required}
+    [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || die "invalid upstream SHA: $sha"
+    validate_head "$head"
+    claim_prelaunch_marker sha "$sha" "$head"
+    ;;
+
+  claim-launch)
+    # repository-token-permissions: issues=write
+    require_commands gh grep
+    day=${1:?day is required}
+    head=${2:?head is required}
+    [[ "$day" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || die "invalid UTC day: $day"
+    validate_head "$head"
+    if ! census=$(marker_census); then # census-fails-closed
+      printf 'BLOCKED census-unreadable\n'
+      exit 1
     fi
-    comment_issue "$marker"
+    while IFS= read -r line; do
+      if [[ "$line" =~ ^\<\!--\ daily-amaru\ day="$day"\ launch-consumed\ head=[0-9a-f]{40}\ --\>$ ]]; then
+        printf 'BLOCKED launch-consumed\n'
+        exit 1 # launch-consumed-final
+      fi
+    done <<<"$census"
+    comment_issue "<!-- daily-amaru day=$day launch-consumed head=$head -->"
+    printf 'CLAIMED\n'
     ;;
 
   propose-bootstrap)

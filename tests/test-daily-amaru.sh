@@ -7,12 +7,32 @@ transport="$repo_root/scripts/daily-amaru-github.sh"
 workflow="$repo_root/.github/workflows/daily-amaru.yaml"
 fake_transport="$repo_root/tests/fixtures/daily-amaru/fake-transport.sh"
 fake_gh="$repo_root/tests/fixtures/daily-amaru/fake-gh.sh"
+pre_slice_base=cd8144bdd7d3996ccc63e159227a6376e822df2c
+default_workflow_head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 tmp_root=$(mktemp -d)
 trap 'rm -rf "$tmp_root"' EXIT
 
 fail() {
   printf 'FAIL: %s\n' "$*" >&2
   exit 1
+}
+
+ensure_history_commit() {
+  local repository=$1 commit=$2
+  if git -C "$repository" cat-file -e "$commit^{commit}" 2>/dev/null; then
+    return 0
+  fi
+  if ! git -C "$repository" fetch --no-tags --depth=1 origin "$commit" \
+    >/dev/null 2>&1; then
+    printf 'HISTORY-BASE-UNAVAILABLE repository=%s commit=%s fetch=failed\n' \
+      "$repository" "$commit" >&2
+    return 1
+  fi
+  if ! git -C "$repository" cat-file -e "$commit^{commit}" 2>/dev/null; then
+    printf 'HISTORY-BASE-UNAVAILABLE repository=%s commit=%s fetch=incomplete\n' \
+      "$repository" "$commit" >&2
+    return 1
+  fi
 }
 
 pass() {
@@ -139,25 +159,38 @@ run_case() {
   local identity=${3-test-identity}
   local app_id=${4-}
   local app_key=${5-}
+  local head_source=${6:-daily:$default_workflow_head}
+  local shared_state=${7:-}
+  local controller_under_test=${8:-$controller}
+  local head_env=()
   case_number=$((case_number + 1))
   case_dir="$tmp_root/$case_number-$case_name"
-  case_state="$case_dir/state"
+  case_state=${shared_state:-$case_dir/state}
   case_log="$case_dir/transport.log"
   case_receipt="$case_dir/receipt"
   case_stdout="$case_dir/stdout"
   case_stderr="$case_dir/stderr"
-  mkdir -p "$case_state"
+  mkdir -p "$case_state" "$case_dir"
   : >"$case_log"
 
   if [ "$case_name" = duplicate-same-day ]; then
-    printf '2026-07-31-existing-claim\n' >"$case_state/day-claim"
+    printf '<!-- daily-amaru day=2026-07-31 claim head=%s -->\n' \
+      "$default_workflow_head" >"$case_state/markers"
   fi
   if [ "$case_name" = same-sha-retry ]; then
-    printf '1111111111111111111111111111111111111111\n' >"$case_state/attempted-sha"
+    printf '<!-- daily-amaru attempted-sha=1111111111111111111111111111111111111111 head=%s -->\n' \
+      "$default_workflow_head" >"$case_state/markers"
   fi
 
+  case "$head_source" in
+    daily:*) head_env=(DAILY_AMARU_HEAD="${head_source#daily:}") ;;
+    github:*) head_env=(GITHUB_SHA="${head_source#github:}") ;;
+    absent) head_env=() ;;
+    *) fail "unknown head source: $head_source" ;;
+  esac
+
   case_rc=0
-  env \
+  env -u DAILY_AMARU_HEAD -u GITHUB_SHA \
     FAKE_SCENARIO="$case_name" \
     FAKE_LOG="$case_log" \
     DAILY_AMARU_TRANSPORT="$fake_transport" \
@@ -169,7 +202,8 @@ run_case() {
     DAILY_AMARU_STATE_DIR="$case_state" \
     DAILY_AMARU_RECEIPT="$case_receipt" \
     DAILY_AMARU_ALLOW_REAL=1 \
-    "$controller" >"$case_stdout" 2>"$case_stderr" || case_rc=$?
+    "${head_env[@]}" \
+    "$controller_under_test" >"$case_stdout" 2>"$case_stderr" || case_rc=$?
 }
 
 bash_binary=$(command -v bash)
@@ -208,6 +242,7 @@ run_hermetic_case() {
     DAILY_AMARU_FAKE_GH_LOG="$hermetic_effects" \
     DAILY_AMARU_EFFECT_LOG="$hermetic_effects" \
     DAILY_AMARU_MODE=production \
+    GITHUB_SHA="$default_workflow_head" \
     "${day_env[@]}" \
     DAILY_AMARU_IDENTITY=seed-non-empty-identity \
     DAILY_AMARU_STATE_DIR="$hermetic_state" \
@@ -256,7 +291,7 @@ transport_branch() {
 
 bootstrap_boundary_operations=(propose-bootstrap require-bootstrap-checks)
 repository_boundary_operations=(
-  claim-day last-success-sha claim-sha-attempt prepare-consumer-repin
+  claim-day last-success-sha claim-sha-attempt claim-launch prepare-consumer-repin
   require-consumer-checks await-supervised-integration real-launch receipt
 )
 
@@ -288,6 +323,56 @@ require_failure() {
   [ "$case_rc" -ne 0 ] || fail "scenario=$case_name expected failure"
 }
 
+job_condition() {
+  awk -v job="  $2:" '
+    $0 == job { inside = 1; next }
+    inside && /^  [A-Za-z0-9_-]+:/ { exit }
+    inside && /^    if: / { sub(/^    if: /, ""); print; exit }
+  ' "$1"
+}
+
+workflow_job_steps() {
+  awk -v job="  $2:" '
+    $0 == job { inside = 1; next }
+    inside && /^  [A-Za-z0-9_-]+:/ { exit }
+    inside && $0 == "    steps:" { steps = 1 }
+    inside && steps { print }
+  ' "$1"
+}
+
+routing_holds() {
+  local file=$1 dispatch production dry
+  dispatch=$(awk '
+    /^  workflow_dispatch:$/ { inside = 1 }
+    inside && /^  pull_request:/ { exit }
+    inside { print }
+  ' "$file")
+  grep -Fqx '  workflow_dispatch:' <<<"$dispatch" || return 1
+  grep -Fqx '      production:' <<<"$dispatch" || return 1
+  grep -Fqx '        type: boolean' <<<"$dispatch" || return 1
+  grep -Fqx '        default: false' <<<"$dispatch" || return 1
+  production=$(job_condition "$file" daily-amaru-scheduled)
+  dry=$(job_condition "$file" daily-amaru-dry-run)
+  [ "$production" = "github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.production)" ] || return 1
+  [ "$dry" = "github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.production)" ] || return 1
+  [ "$(grep -Ec '^  daily-amaru-scheduled:$' "$file" || true)" -eq 1 ] || return 1
+  [ "$(grep -Ec '^[[:space:]]+scripts/daily-amaru[.]sh$' "$file" || true)" -eq 1 ] || return 1
+  # shellcheck disable=SC2016
+  grep -Fqx '  group: daily-amaru-${{ github.ref }}' "$file" || return 1
+  grep -Fqx '  cancel-in-progress: false' "$file" || return 1
+}
+
+dry_run_steps_identical() {
+  local file=$1 repository=${2:-$repo_root}
+  local base_commit=${3:-$pre_slice_base}
+  local base_workflow=$tmp_root/pre-slice-workflow.yaml
+  git -C "$repository" show \
+    "$base_commit:.github/workflows/daily-amaru.yaml" >"$base_workflow" || return 1
+  cmp -s \
+    <(workflow_job_steps "$file" daily-amaru-dry-run) \
+    <(workflow_job_steps "$base_workflow" daily-amaru-dry-run)
+}
+
 if [ ! -x "$fake_transport" ]; then
   fail "fake transport is absent or not executable: $fake_transport"
 fi
@@ -309,6 +394,13 @@ fi
 if [ ! -f "$workflow" ]; then
   fail "scheduled workflow absent: expected regular file $workflow"
 fi
+
+ensure_history_commit "$repo_root" "$pre_slice_base" ||
+  fail "history baseline unavailable: $pre_slice_base"
+
+# Complete #223 proof bundle is intentionally RED on the unchanged base.
+routing_holds "$workflow" ||
+  fail 'INV-223-DISPATCH-ROUTING: typed manual production routing is absent'
 
 oracle_root="$tmp_root/receipt-oracle"
 mkdir -p "$oracle_root"
@@ -580,19 +672,23 @@ pass '#202-zero'
 
 run_case duplicate-same-day
 require_failure
-assert_file_contains "$case_state/day-claim" '2026-07-31-existing-claim'
+assert_file_contains "$case_state/markers" \
+  "<!-- daily-amaru day=2026-07-31 claim head=$default_workflow_head -->"
 assert_log_count 0 '^resolve-upstream '
 assert_no_mutation
 assert_no_launch
 assert_honest_failure_receipt day-claim
+assert_file_contains "$case_receipt" 'error=unchanged-head'
 pass duplicate-same-day
 
 run_case same-sha-retry
 require_failure
-assert_file_contains "$case_state/attempted-sha" '1111111111111111111111111111111111111111'
+assert_file_contains "$case_state/markers" \
+  "<!-- daily-amaru attempted-sha=1111111111111111111111111111111111111111 head=$default_workflow_head -->"
 assert_no_mutation
 assert_no_launch
 assert_honest_failure_receipt launch-attempt
+assert_file_contains "$case_receipt" 'error=unchanged-head'
 pass same-sha-retry
 
 run_case failed-stage
@@ -833,8 +929,10 @@ wiring_holds() {
 }
 wiring_holds "$workflow" ||
   fail 'the workflow does not executably call both controller entry points'
-assert_workflow_literal_once "if: github.event_name != 'schedule'"
-assert_workflow_literal_once "if: github.event_name == 'schedule'"
+assert_workflow_literal_once \
+  "if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.production)"
+assert_workflow_literal_once \
+  "if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.production)"
 assert_workflow_literal_once 'DAILY_AMARU_MODE: production'
 assert_workflow_literal_once 'uses: actions/upload-artifact@v6'
 [ "$(count_literal "$workflow" 'if: always()')" -eq 2 ] ||
@@ -989,6 +1087,7 @@ env \
   FAKE_LOG="$generic_id_dir/transport.log" \
   DAILY_AMARU_TRANSPORT="$fake_transport" \
   DAILY_AMARU_MODE=production \
+  GITHUB_SHA="$default_workflow_head" \
   DAILY_AMARU_DAY=2026-07-31 \
   DAILY_AMARU_IDENTITY="" \
   DAILY_AMARU_STATE_DIR="$generic_id_dir/state" \
@@ -1155,6 +1254,7 @@ run_omitted_day_case() {
     FAKE_LOG="$case_log" \
     DAILY_AMARU_TRANSPORT="$fake_transport" \
     DAILY_AMARU_MODE=test \
+    GITHUB_SHA="$default_workflow_head" \
     DAILY_AMARU_IDENTITY=test-identity \
     DAILY_AMARU_STATE_DIR="$case_state" \
     DAILY_AMARU_RECEIPT="$case_receipt" \
@@ -1347,3 +1447,841 @@ for forbidden in 'repo clone' 'pr create' 'pr merge' 'workflow run' 'run watch';
   fi
 done
 pass omitted-day-receipts-survive-failure
+
+# ---------------------------------------------------------------------------
+# Issue #223 — manual production routing and controller-owned daily launch cap.
+# ---------------------------------------------------------------------------
+
+claim_call() {
+  local root=$1 script=$2 census_failure=$3 operation=$4
+  shift 4
+  mkdir -p "$root/bin"
+  ln -sf "$fake_gh" "$root/bin/gh"
+  [ "$(PATH="$root/bin:$PATH" command -v gh)" = "$root/bin/gh" ] ||
+    fail 'claim harness did not resolve the deterministic gh fixture'
+  claim_stdout=$root/stdout
+  claim_stderr=$root/stderr
+  claim_rc=0
+  env \
+    PATH="$root/bin:$PATH" \
+    GH_TOKEN=fake-repository-token \
+    DAILY_AMARU_FAKE_GH_LOG="$root/gh.log" \
+    DAILY_AMARU_FAKE_GH_COMMENTS="$root/comments" \
+    DAILY_AMARU_FAKE_GH_CENSUS_FAIL="$census_failure" \
+    DAILY_AMARU_STATE_DIR="$root/state" \
+    DAILY_AMARU_RECEIPT="$root/receipt" \
+    bash "$script" "$operation" "$@" \
+    >"$claim_stdout" 2>"$claim_stderr" || claim_rc=$?
+  claim_output=$(cat "$claim_stdout")
+}
+
+launch_cap_holds() {
+  local script=$1 root
+  root=$(mktemp -d "$tmp_root/launch-cap.XXXXXX")
+  mkdir -p "$root/state"
+  : >"$root/comments"
+  : >"$root/gh.log"
+  claim_call "$root" "$script" 0 claim-day 2026-08-19 \
+    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  [ "$claim_rc" -eq 0 ] && [ "$claim_output" = CLAIMED ] || return 1
+  claim_call "$root" "$script" 0 claim-launch 2026-08-19 \
+    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  [ "$claim_rc" -eq 0 ] && [ "$claim_output" = CLAIMED ] || return 1
+  claim_call "$root" "$script" 0 claim-day 2026-08-19 \
+    bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  [ "$claim_rc" -ne 0 ] && [ "$claim_output" = 'BLOCKED launch-consumed' ] || return 1
+  [ "$(grep -c 'launch-consumed' "$root/comments" || true)" -eq 1 ]
+}
+
+supersede_holds() {
+  local script=$1 root before after
+  root=$(mktemp -d "$tmp_root/supersede.XXXXXX")
+  mkdir -p "$root/state"
+  printf '<!-- daily-amaru day=2026-08-19 claim head=%s -->\n' \
+    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa >"$root/comments"
+  : >"$root/gh.log"
+  before=$(wc -l <"$root/comments")
+  claim_call "$root" "$script" 0 claim-day 2026-08-19 \
+    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  [ "$claim_rc" -ne 0 ] && [ "$claim_output" = 'BLOCKED unchanged-head' ] || return 1
+  claim_call "$root" "$script" 0 claim-day 2026-08-19 \
+    bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  [ "$claim_rc" -eq 0 ] &&
+    [ "$claim_output" = 'SUPERSEDED previous-head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ] || return 1
+  after=$(wc -l <"$root/comments")
+  [ "$after" -eq $((before + 1)) ] || return 1
+  grep -Fqx '<!-- daily-amaru day=2026-08-19 claim head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -->' \
+    "$root/comments"
+}
+
+census_failure_holds() {
+  local script=$1 operation positive_root failure_root before after
+  local -a arguments
+  census_positive_controls=0
+  census_forced_failures=0
+  census_unchanged_stores=0
+  for operation in claim-day claim-sha-attempt claim-launch; do
+    case "$operation" in
+      claim-sha-attempt)
+        arguments=(1111111111111111111111111111111111111111 \
+          aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+        ;;
+      *)
+        arguments=(2026-08-20 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+        ;;
+    esac
+    positive_root=$(mktemp -d "$tmp_root/census-positive.XXXXXX")
+    failure_root=$(mktemp -d "$tmp_root/census-failure.XXXXXX")
+    mkdir -p "$positive_root/state" "$failure_root/state"
+    : >"$positive_root/comments"
+    : >"$positive_root/gh.log"
+    : >"$failure_root/comments"
+    : >"$failure_root/gh.log"
+    claim_call "$positive_root" "$script" 0 "$operation" "${arguments[@]}"
+    [ "$claim_rc" -eq 0 ] && [ "$claim_output" = CLAIMED ] || return 1
+    census_positive_controls=$((census_positive_controls + 1))
+    before=$(sha256sum "$failure_root/comments" | awk '{print $1}')
+    claim_call "$failure_root" "$script" 1 "$operation" "${arguments[@]}"
+    after=$(sha256sum "$failure_root/comments" | awk '{print $1}')
+    [ "$claim_rc" -ne 0 ] && [ "$claim_output" = 'BLOCKED census-unreadable' ] &&
+      [ "$before" = "$after" ] || return 1
+    census_forced_failures=$((census_forced_failures + 1))
+    census_unchanged_stores=$((census_unchanged_stores + 1))
+  done
+}
+
+claim_operations() {
+  grep -E '^  claim-(day|sha-attempt|launch)\)$' "$1" |
+    sed 's/^  //; s/)$//' | sort -u
+}
+
+claim_operation_sets_match() {
+  local production=$1 fixture=$2
+  [ "$(claim_operations "$production")" = "$(claim_operations "$fixture")" ] &&
+    [ "$(claim_operations "$production" | grep -c . || true)" -eq 3 ]
+}
+
+declare -A issue_223_mutant_invariant=()
+issue_223_declared_invariants=(
+  INV-223-DISPATCH-ROUTING
+  INV-223-DRY-RUN-BYTE-UNCHANGED
+  INV-223-ONE-LAUNCH-PER-DAY
+  INV-223-PRELAUNCH-SUPERSEDE
+  INV-223-MARKER-CENSUS-FAILS-CLOSED
+  INV-223-HEAD-CROSSES-PROCESS
+  INV-223-PROOFS-NONVACUOUS
+  INV-223-SCOPE-AND-EFFECT-FENCE
+)
+issue_223_declared_mutants=(
+  routing-string-input
+  dry-run-byte
+  launch-cap-exit-open
+  supersede-inverted
+  census-open
+  head-export-removed
+  fixture-claim-launch-removed
+  claim-after-launch
+  legacy-marker-ignored
+  legacy-verdict-corrupted
+  sha-prefix-blinded
+  launch-marker-blinded
+  receipt-workflow-head-removed
+  receipt-supersedes-removed
+  receipt-launch-claim-removed
+  receipt-launch-cap-write-removed
+  scope-path-outside-fence
+  history-base-unavailable
+)
+issue_223_allowed_paths=(
+  .github/workflows/daily-amaru.yaml
+  scripts/daily-amaru.sh
+  scripts/daily-amaru-github.sh
+  tests/test-daily-amaru.sh
+  tests/test-workflow-validation.sh
+  tests/fixtures/daily-amaru/fake-transport.sh
+  tests/fixtures/daily-amaru/fake-gh.sh
+  specs/223-manual-production-trigger/tasks.md
+)
+
+register_223_mutant() {
+  local invariant=$1 label=$2
+  [ -z "${issue_223_mutant_invariant[$label]:-}" ] ||
+    fail "duplicate #223 mutant registration: $label"
+  issue_223_mutant_invariant[$label]=$invariant
+}
+
+reject_223_mutant() {
+  local invariant=$1 label=$2
+  shift 2
+  reject_mutant "$@"
+  register_223_mutant "$invariant" "$label"
+}
+
+evaluate_job_condition() {
+  local condition=$1 event=$2 input=$3
+  case "$condition" in
+    "github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.production)")
+      [ "$event" = schedule ] ||
+        { [ "$event" = workflow_dispatch ] && [ "$input" = true ]; }
+      ;;
+    "github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.production)")
+      [ "$event" = pull_request ] ||
+        { [ "$event" = workflow_dispatch ] && [ "$input" = false ]; }
+      ;;
+    *) return 2 ;;
+  esac
+}
+
+routing_truth_table_holds() {
+  local file=$1 production dry row event input expected_production expected_dry
+  local actual_production actual_dry
+  production=$(job_condition "$file" daily-amaru-scheduled)
+  dry=$(job_condition "$file" daily-amaru-dry-run)
+  routing_census_rows=()
+  routing_cases=(
+    'schedule|false|1|0'
+    'workflow_dispatch|true|1|0'
+    'workflow_dispatch|false|0|1'
+    'pull_request|false|0|1'
+  )
+  for row in "${routing_cases[@]}"; do
+    IFS='|' read -r event input expected_production expected_dry <<<"$row"
+    actual_production=0
+    evaluate_job_condition "$production" "$event" "$input" && actual_production=1
+    actual_dry=0
+    evaluate_job_condition "$dry" "$event" "$input" && actual_dry=1
+    [ "$actual_production" -eq "$expected_production" ] &&
+      [ "$actual_dry" -eq "$expected_dry" ] || return 1
+    routing_census_rows+=("event=$event production_input=$input production=$actual_production dry_run=$actual_dry")
+  done
+}
+
+claim_backend_call() {
+  local backend=$1 root=$2 script=$3 operation=$4
+  shift 4
+  if [ "$backend" = production ]; then
+    claim_call "$root" "$script" 0 "$operation" "$@"
+    return
+  fi
+  mkdir -p "$root/state"
+  : >"$root/fixture.log"
+  claim_stdout=$root/stdout
+  claim_stderr=$root/stderr
+  claim_rc=0
+  env \
+    FAKE_SCENARIO=changed \
+    FAKE_LOG="$root/fixture.log" \
+    DAILY_AMARU_STATE_DIR="$root/state" \
+    DAILY_AMARU_RECEIPT="$root/receipt" \
+    bash "$script" "$operation" "$@" \
+    >"$claim_stdout" 2>"$claim_stderr" || claim_rc=$?
+  claim_output=$(cat "$claim_stdout")
+}
+
+claim_verdict_table_holds() {
+  local script=$1 backend=$2 row kind prior expected_output expected_rc
+  local root store operation value marker before after appended
+  local old_head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  local new_head=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  claim_verdict_rows=(
+    'day|none|CLAIMED|0'
+    'day|legacy|SUPERSEDED previous-head=legacy|0'
+    'day|same|BLOCKED unchanged-head|1'
+    'day|changed|SUPERSEDED previous-head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|0'
+    'day|launched|BLOCKED launch-consumed|1'
+    'sha|none|CLAIMED|0'
+    'sha|legacy|SUPERSEDED previous-head=legacy|0'
+    'sha|same|BLOCKED unchanged-head|1'
+    'sha|changed|SUPERSEDED previous-head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|0'
+    'launch|none|CLAIMED|0'
+    'launch|launched|BLOCKED launch-consumed|1'
+  )
+  # Operation names ending in "-day" are strings, not arithmetic updates.
+  # shellcheck disable=SC2100
+  for row in "${claim_verdict_rows[@]}"; do
+    IFS='|' read -r kind prior expected_output expected_rc <<<"$row"
+    root=$(mktemp -d "$tmp_root/verdict-$backend.XXXXXX")
+    mkdir -p "$root/state"
+    if [ "$backend" = production ]; then
+      store=$root/comments
+      : >"$root/gh.log"
+    else
+      store=$root/state/markers
+    fi
+    : >"$store"
+    case "$kind" in
+      day)
+        operation=claim-day
+        value=2026-08-21
+        marker="<!-- daily-amaru day=$value claim head=$new_head -->"
+        ;;
+      sha)
+        operation=claim-sha-attempt
+        value=1111111111111111111111111111111111111111
+        marker="<!-- daily-amaru attempted-sha=$value head=$new_head -->"
+        ;;
+      launch)
+        operation=claim-launch
+        value=2026-08-21
+        marker="<!-- daily-amaru day=$value launch-consumed head=$new_head -->"
+        ;;
+    esac
+    case "$prior" in
+      none) ;;
+      legacy)
+        if [ "$kind" = day ]; then
+          printf '<!-- daily-amaru day=%s claim -->\n' "$value" >"$store"
+        else
+          printf '<!-- daily-amaru attempted-sha=%s -->\n' "$value" >"$store"
+        fi
+        ;;
+      same)
+        printf '%s\n' "${marker%"$new_head" -->}$new_head -->" >"$store"
+        ;;
+      changed)
+        printf '%s\n' "${marker%"$new_head" -->}$old_head -->" >"$store"
+        ;;
+      launched)
+        printf '<!-- daily-amaru day=%s launch-consumed head=%s -->\n' \
+          "$value" "$old_head" >"$store"
+        ;;
+    esac
+    before=$(wc -l <"$store")
+    claim_backend_call "$backend" "$root" "$script" "$operation" "$value" "$new_head"
+    if [ "$claim_output" != "$expected_output" ]; then
+      printf 'claim verdict mismatch backend=%s kind=%s prior=%s expected=%s actual=%s\n' \
+        "$backend" "$kind" "$prior" "$expected_output" "$claim_output" >&2
+      return 1
+    fi
+    if { [ "$expected_rc" -eq 0 ] && [ "$claim_rc" -ne 0 ]; } ||
+      { [ "$expected_rc" -ne 0 ] && [ "$claim_rc" -eq 0 ]; }; then
+      printf 'claim exit mismatch backend=%s kind=%s prior=%s expected=%s actual=%s\n' \
+        "$backend" "$kind" "$prior" "$expected_rc" "$claim_rc" >&2
+      return 1
+    fi
+    after=$(wc -l <"$store")
+    appended=0
+    if [ "$expected_rc" -eq 0 ]; then
+      [ "$after" -eq $((before + 1)) ] || return 1
+      tail -n 1 "$store" | grep -Fqx -- "$marker" || return 1
+      appended=1
+    else
+      [ "$after" -eq "$before" ] || return 1
+    fi
+    claim_verdict_observations+=("backend=$backend kind=$kind prior=$prior stdout=$claim_output exit=$expected_rc appended=$appended")
+  done
+}
+
+production_claim_verdict_table_holds() {
+  claim_verdict_table_holds "$1" production 2>/dev/null
+}
+
+effect_order_holds() {
+  local script=$1 claim effect claim_line effect_line
+  ordered_claim_effect_pairs=0
+  run_case order-proof production token app key \
+    daily:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb '' "$script"
+  [ "$case_rc" -eq 0 ] || return 1
+  for claim in 'claim-day ' 'claim-sha-attempt '; do
+    claim_line=$(grep -n -m1 "^$claim" "$case_log" | cut -d: -f1)
+    for effect in 'mutation:bootstrap ' 'mutation:image ' 'mutation:repin ' 'real-launch '; do
+      effect_line=$(grep -n -m1 "^$effect" "$case_log" | cut -d: -f1)
+      [ -n "$claim_line" ] && [ -n "$effect_line" ] &&
+        [ "$claim_line" -lt "$effect_line" ] || return 1
+      ordered_claim_effect_pairs=$((ordered_claim_effect_pairs + 1))
+    done
+  done
+  claim_line=$(grep -n -m1 '^claim-launch ' "$case_log" | cut -d: -f1)
+  effect_line=$(grep -n -m1 '^real-launch ' "$case_log" | cut -d: -f1)
+  [ -n "$claim_line" ] && [ -n "$effect_line" ] &&
+    [ "$claim_line" -lt "$effect_line" ] || return 1
+  ordered_claim_effect_pairs=$((ordered_claim_effect_pairs + 1))
+}
+
+receipt_model_keys() {
+  awk '
+    /^## Receipt fields added$/ { inside = 1; next }
+    inside && /^## / { exit }
+    inside && /^\| `/ {
+      sub(/^\| `/, "")
+      sub(/`.*/, "")
+      print
+    }
+  ' "$repo_root/specs/223-manual-production-trigger/data-model.md"
+}
+
+receipt_model_holds() {
+  local script=$1 state key history
+  state=$(mktemp -d "$tmp_root/receipt-model.XXXXXX")
+  run_case failed-stage production token app key \
+    daily:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$state" "$script"
+  [ "$case_rc" -ne 0 ] || return 1
+  run_case changed production token app key \
+    daily:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb "$state" "$script"
+  [ "$case_rc" -eq 0 ] || return 1
+  history=$state/receipt-history
+  mapfile -t receipt_declared_keys < <(receipt_model_keys)
+  [ "${#receipt_declared_keys[@]}" -gt 0 ] || return 1
+  for key in "${receipt_declared_keys[@]}"; do
+    if ! grep -Eq "^$key=" "$history"; then
+      printf 'receipt model key lacks durable evidence: %s\n' "$key" >&2
+      return 1
+    fi
+  done
+  if ! awk -v head=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb '
+    BEGIN { RS="--- receipt ---\n"; found=0 }
+    $0 ~ /(^|\n)stage=launch-cap(\n|$)/ &&
+    $0 ~ /(^|\n)outcome=CLAIMED(\n|$)/ &&
+    $0 ~ "(^|\\n)workflow_head=" head "(\\n|$)" &&
+    $0 ~ /(^|\n)launch_claim=consumed(\n|$)/ { found++ }
+    END { exit(found == 1 ? 0 : 1) }
+  ' "$history"; then
+    printf 'launch-cap receipt lacks exact workflow_head/outcome/launch_claim evidence\n' >&2
+    return 1
+  fi
+}
+
+
+receipt_model_mutant_rejected() {
+  receipt_model_holds "$1" 2>/dev/null
+}
+
+paths_within_223_fence() {
+  local path allowed allowed_path
+  for path in "$@"; do
+    allowed=0
+    for allowed_path in "${issue_223_allowed_paths[@]}"; do
+      [ "$path" = "$allowed_path" ] && allowed=1
+    done
+    [ "$allowed" -eq 1 ] || return 1
+  done
+}
+
+history_base_controls() {
+  local seed=$tmp_root/history-seed
+  local origin=$tmp_root/history-origin.git
+  local positive=$tmp_root/history-positive
+  local negative=$tmp_root/history-negative
+  local control_base
+  local changed_output negative_error=$tmp_root/history-negative.stderr
+  local -a control_paths=()
+
+  git init --quiet --initial-branch=main "$seed" || return 1
+  git -C "$seed" config user.name history-control || return 1
+  git -C "$seed" config user.email history-control@example.invalid || return 1
+  mkdir -p "$seed/.github/workflows" "$seed/tests" || return 1
+  cp "$workflow" "$seed/.github/workflows/daily-amaru.yaml" || return 1
+  printf 'base\n' >"$seed/tests/test-daily-amaru.sh"
+  git -C "$seed" add . || return 1
+  git -C "$seed" commit --quiet -m base || return 1
+  control_base=$(git -C "$seed" rev-parse HEAD) || return 1
+  printf 'head\n' >"$seed/tests/test-daily-amaru.sh"
+  git -C "$seed" commit --quiet -am head || return 1
+  git clone --quiet --bare "$seed" "$origin" || return 1
+
+  git clone --quiet --depth=1 --single-branch --branch main \
+    "file://$origin" "$positive" || return 1
+  [ "$(git -C "$positive" rev-list --count HEAD)" -eq 1 ] || return 1
+  ! git -C "$positive" cat-file -e "$control_base^{commit}" 2>/dev/null || return 1
+  ensure_history_commit "$positive" "$control_base" || return 1
+  git -C "$positive" cat-file -e "$control_base^{commit}" 2>/dev/null || return 1
+  dry_run_steps_identical \
+    "$positive/.github/workflows/daily-amaru.yaml" "$positive" "$control_base" || return 1
+  changed_output=$(git -C "$positive" diff --name-only "$control_base" --) || return 1
+  mapfile -t control_paths < <(printf '%s' "$changed_output")
+  [ "${#control_paths[@]}" -gt 0 ] || return 1
+  paths_within_223_fence "${control_paths[@]}" || return 1
+
+  git clone --quiet --depth=1 --single-branch --branch main \
+    "file://$origin" "$negative" || return 1
+  ! git -C "$negative" cat-file -e "$control_base^{commit}" 2>/dev/null || return 1
+  git -C "$negative" remote set-url origin \
+    "file://$tmp_root/missing-origin.git" || return 1
+  if ensure_history_commit "$negative" "$control_base" \
+    >"$tmp_root/history-negative.stdout" 2>"$negative_error"; then
+    return 1
+  fi
+  grep -Fqx "HISTORY-BASE-UNAVAILABLE repository=$negative commit=$control_base fetch=failed" \
+    "$negative_error" || return 1
+  ! git -C "$negative" cat-file -e "$control_base^{commit}" 2>/dev/null || return 1
+
+  register_223_mutant INV-223-PROOFS-NONVACUOUS history-base-unavailable
+  history_positive_fetches=1
+  history_negative_refusals=1
+  history_dry_run_checks=1
+  history_path_censuses=1
+}
+
+head_propagation_holds() {
+  local script=$1 head=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  run_case head-property production token app key "github:$head" '' "$script"
+  [ "$case_rc" -eq 0 ] || return 1
+  grep -Fqx "claim-day 2026-07-31 $head" "$case_log" || return 1
+  grep -Fqx "claim-sha-attempt 1111111111111111111111111111111111111111 $head" \
+    "$case_log" || return 1
+  grep -Fqx "claim-launch 2026-07-31 $head" "$case_log"
+}
+
+history_base_controls || fail 'history baseline controls did not hold'
+routing_holds "$workflow" || fail 'typed dispatch routing is not exact'
+routing_truth_table_holds "$workflow" || fail 'observed workflow conditions failed their truth table'
+dry_run_steps_identical "$workflow" || fail 'dry-run steps changed from the frozen base'
+base_workflow_snapshot=$tmp_root/pre-slice-workflow-for-hash.yaml
+git -C "$repo_root" show "$pre_slice_base:.github/workflows/daily-amaru.yaml" \
+  >"$base_workflow_snapshot" || fail 'history baseline workflow is unreadable'
+base_dry_hash=$(workflow_job_steps "$base_workflow_snapshot" daily-amaru-dry-run |
+  sha256sum | awk '{print $1}')
+current_dry_hash=$(workflow_job_steps "$workflow" daily-amaru-dry-run |
+  sha256sum | awk '{print $1}')
+
+for routing_row in "${routing_census_rows[@]}"; do
+  printf 'ROUTING %s\n' "$routing_row"
+done
+
+# Both production-trigger orderings reach exactly one fake real-launch effect.
+trigger_pairs=(schedule-dispatch dispatch-schedule)
+launch_scenario_launches=()
+for trigger_pair in "${trigger_pairs[@]}"; do
+  first=${trigger_pair%-*}
+  second=${trigger_pair#*-}
+  pair_state="$tmp_root/cap-$trigger_pair"
+  mkdir -p "$pair_state"
+  run_case "$first-first" production token app key \
+    daily:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$pair_state"
+  require_success
+  assert_log_count 1 '^real-launch '
+  run_case "$second-second" production token app key \
+    daily:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb "$pair_state"
+  require_failure
+  assert_no_launch
+  assert_honest_failure_receipt day-claim
+  assert_file_contains "$case_receipt" 'error=launch-consumed'
+  launches=$(cat "$pair_state/real-launch-count")
+  [ "$launches" -eq 1 ] || fail "$trigger_pair reached $launches launch effects"
+  launch_scenario_launches+=("$launches")
+  printf 'LAUNCH-SCENARIO first=%s second=%s day=2026-07-31 launches=%s refusal_stage=day-claim error=launch-consumed\n' \
+    "$first" "$second" "$launches"
+done
+
+# A pre-launch death is blocked at the same head and superseded at a new head.
+prelaunch_state="$tmp_root/prelaunch-state"
+mkdir -p "$prelaunch_state"
+run_case failed-stage production token app key \
+  daily:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$prelaunch_state"
+require_failure
+assert_honest_failure_receipt bootstrap-proposal
+markers_before=$(wc -l <"$prelaunch_state/markers")
+receipts_before=$(grep -c '^--- receipt ---$' "$prelaunch_state/receipt-history" || true)
+run_case prelaunch-unchanged production token app key \
+  daily:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$prelaunch_state"
+require_failure
+assert_honest_failure_receipt day-claim
+assert_file_contains "$case_receipt" 'error=unchanged-head'
+run_case prelaunch-changed production token app key \
+  daily:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb "$prelaunch_state"
+require_success
+markers_after=$(wc -l <"$prelaunch_state/markers")
+receipts_after=$(grep -c '^--- receipt ---$' "$prelaunch_state/receipt-history" || true)
+[ "$markers_after" -gt "$markers_before" ] || fail 'supersede did not append markers'
+[ "$receipts_after" -gt "$receipts_before" ] || fail 'supersede lost prior receipts'
+assert_file_contains "$case_receipt" \
+  'claim_supersedes=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+printf 'SUPERSEDE-SCENARIO recorded_head=%s current_head=%s verdict=SUPERSEDED superseded_head=%s markers_before=%s markers_after=%s receipts_before=%s receipts_after=%s\n' \
+  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  "$markers_before" "$markers_after" "$receipts_before" "$receipts_after"
+
+# A legacy headless claim differs from every valid current head and is retained.
+legacy_state="$tmp_root/legacy-state"
+mkdir -p "$legacy_state"
+printf '%s\n%s\n' \
+  '<!-- daily-amaru day=2026-07-31 claim -->' \
+  '<!-- daily-amaru attempted-sha=1111111111111111111111111111111111111111 -->' \
+  >"$legacy_state/markers"
+legacy_before=$(wc -l <"$legacy_state/markers")
+run_case legacy-supersede production token app key \
+  daily:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb "$legacy_state"
+require_success
+legacy_after=$(wc -l <"$legacy_state/markers")
+[ "$legacy_after" -gt "$legacy_before" ] || fail 'legacy supersede did not append'
+assert_file_contains "$legacy_state/markers" '<!-- daily-amaru day=2026-07-31 claim -->'
+assert_file_contains "$case_receipt" 'claim_supersedes=legacy'
+printf 'SUPERSEDE-SCENARIO recorded_head=legacy current_head=%s verdict=SUPERSEDED superseded_head=legacy markers_before=%s markers_after=%s\n' \
+  bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb "$legacy_before" "$legacy_after"
+
+# The production transport itself fails closed when its census command fails.
+census_failure_holds "$transport" || fail 'failed marker census admitted a claim'
+launch_cap_holds "$transport" || fail 'production transport admitted a post-launch claim'
+supersede_holds "$transport" || fail 'production transport violated the supersede rule'
+
+# The controller derives GITHUB_SHA once and every claim child observes it.
+head_propagation_holds "$controller" || fail 'workflow head did not cross every claim child'
+invalid_heads=(absent daily:not-a-sha)
+for invalid_head in "${invalid_heads[@]}"; do
+  run_case "head-${invalid_head%%:*}" test token '' '' "$invalid_head"
+  require_failure
+  assert_honest_failure_receipt head-resolution
+  assert_log_count 0 '^claim-(day|sha-attempt|launch) '
+done
+
+# Production and deterministic transports expose exactly the same claim set.
+claim_operation_sets_match "$transport" "$fake_transport" ||
+  fail 'fixture and production claim operation sets differ'
+
+# The behavioral table is one oracle driven against both implementations.
+claim_verdict_observations=()
+claim_verdict_table_holds "$transport" production ||
+  fail 'production transport failed the claim verdict table'
+claim_verdict_table_holds "$fake_transport" fixture ||
+  fail 'deterministic transport failed the claim verdict table'
+claim_verdict_rows_per_backend=${#claim_verdict_rows[@]}
+claim_verdict_backends=2
+printf 'CLAIM-VERDICT-TABLE rows_per_backend=%s backends=%s observations=%s\n' \
+  "$claim_verdict_rows_per_backend" "$claim_verdict_backends" \
+  "${#claim_verdict_observations[@]}"
+
+# Actual effect-log indexes prove each durable guard precedes what it guards.
+effect_order_holds "$controller" ||
+  fail 'durable claim operations did not precede their guarded effects'
+
+# Every receipt key added by the data model is exercised in durable history.
+receipt_model_holds "$controller" ||
+  fail 'declared #223 receipt fields lack executing durable evidence'
+
+# Applied-then-rejected mutants, one for every critical #223 protection.
+# shellcheck disable=SC2016
+reject_223_mutant INV-223-DISPATCH-ROUTING routing-string-input \
+  dispatch-string-form.yaml "$workflow" \
+  's/inputs[.]production/github.event.inputs.production/g' \
+  'github.event.inputs.production' \
+  'the truthy string-form dispatch input' routing_truth_table_holds
+
+reject_223_mutant INV-223-DRY-RUN-BYTE-UNCHANGED dry-run-byte \
+  dry-run-byte.yaml "$workflow" \
+  's/Exercise the controller through the fake transport/Exercise changed dry-run body/' \
+  'Exercise changed dry-run body' \
+  'a changed dry-run step body' dry_run_steps_identical
+
+reject_223_mutant INV-223-ONE-LAUNCH-PER-DAY launch-cap-exit-open \
+  launch-cap-open.sh "$transport" \
+  's/return 1 # launch-consumed-final/return 0 # launch-consumed-final/' \
+  'return 0 # launch-consumed-final' \
+  'a launch-consumed verdict that exits successfully' launch_cap_holds
+
+# shellcheck disable=SC2016
+reject_223_mutant INV-223-PRELAUNCH-SUPERSEDE supersede-inverted \
+  supersede-inverted.sh "$transport" \
+  's/if \[ "$recorded_head" = "$head" \]; then # unchanged-head-guard/if [ "$recorded_head" != "$head" ]; then # unchanged-head-guard/' \
+  'if [ "$recorded_head" != "$head" ]; then # unchanged-head-guard' \
+  'an inverted unchanged-head guard' supersede_holds
+
+# shellcheck disable=SC2016
+reject_223_mutant INV-223-MARKER-CENSUS-FAILS-CLOSED census-open \
+  census-open.sh "$transport" \
+  's/if ! census=$(marker_census); then # census-fails-closed/if census=$(marker_census); then # census-fails-closed/' \
+  'if census=$(marker_census); then # census-fails-closed' \
+  'a census failure interpreted as an empty census' census_failure_holds
+
+head_mutant="$mutant_root/controller-no-head-export.sh"
+sed '/^export DAILY_AMARU_HEAD=/d' "$controller" >"$head_mutant"
+grep -Fq 'export DAILY_AMARU_HEAD=' "$controller" ||
+  fail 'head propagation mutation has no production line to remove'
+! grep -Fq 'export DAILY_AMARU_HEAD=' "$head_mutant" ||
+  fail 'head propagation mutation did not apply'
+if head_propagation_holds "$head_mutant"; then
+  fail 'controller without head export passed propagation proof'
+fi
+register_223_mutant INV-223-HEAD-CROSSES-PROCESS head-export-removed
+
+fixture_claim_mutant="$mutant_root/fake-transport-no-claim-launch.sh"
+sed 's/^  claim-launch)$/  claim-launch-disabled)/' "$fake_transport" \
+  >"$fixture_claim_mutant"
+grep -Fqx '  claim-launch-disabled)' "$fixture_claim_mutant" ||
+  fail 'fixture claim-set mutation did not apply'
+if claim_operation_sets_match "$transport" "$fixture_claim_mutant"; then
+  fail 'claim operation reconciliation accepted a missing fixture operation'
+fi
+register_223_mutant INV-223-PROOFS-NONVACUOUS fixture-claim-launch-removed
+
+# F1: move the launch claim after the launch effect; the log-order proof must kill it.
+order_mutant="$mutant_root/controller-claim-after-launch.sh"
+awk '
+  /^  claim_operation launch-cap claim-launch no / { next }
+  /^  receipt\[launch_claim\]=consumed$/ { next }
+  /^  write_receipt launch-cap CLAIMED$/ { next }
+  /^  fail_stage launch submission-failed$/ { after_launch_failure = 1 }
+  { print }
+  after_launch_failure && /^fi$/ {
+    print ""
+    print "if [ \"$mode\" = production ]; then"
+    print "  claim_operation launch-cap claim-launch no \"$day\" \"$head\""
+    print "  receipt[launch_claim]=consumed"
+    print "  write_receipt launch-cap CLAIMED"
+    print "fi"
+    after_launch_failure = 0
+  }
+' "$controller" >"$order_mutant"
+[ "$(grep -n '^  claim_operation launch-cap ' "$order_mutant" | cut -d: -f1)" -gt \
+  "$(grep -n '^if ! launch_request=' "$order_mutant" | cut -d: -f1)" ] ||
+  fail 'claim-after-launch mutation did not apply'
+if effect_order_holds "$order_mutant"; then
+  fail 'effect-order proof accepted a launch claim after the launcher'
+fi
+register_223_mutant INV-223-ONE-LAUNCH-PER-DAY claim-after-launch
+
+# F2: production-transport defect classes are all judged by the shared table.
+# shellcheck disable=SC2016
+reject_223_mutant INV-223-PRELAUNCH-SUPERSEDE legacy-marker-ignored \
+  legacy-marker-ignored.sh "$transport" \
+  's/if \[ "$line" = "$legacy_marker" \]; then/if [ "$line" = "ignored-$legacy_marker" ]; then/' \
+  'if [ "$line" = "ignored-$legacy_marker" ]; then' \
+  'a legacy claim ignored by production' production_claim_verdict_table_holds
+# shellcheck disable=SC2016
+reject_223_mutant INV-223-PRELAUNCH-SUPERSEDE legacy-verdict-corrupted \
+  legacy-verdict-corrupted.sh "$transport" \
+  's/previous_head=legacy/previous_head=unrecognized/' \
+  'previous_head=unrecognized' \
+  'a legacy claim reported with an unrecognized predecessor' production_claim_verdict_table_holds
+# shellcheck disable=SC2016
+reject_223_mutant INV-223-PRELAUNCH-SUPERSEDE sha-prefix-blinded \
+  sha-prefix-blinded.sh "$transport" \
+  's/attempted-sha=$value head=/attempted-sha-blind=$value head=/' \
+  'attempted-sha-blind=$value head=' \
+  'a SHA claim scan with the wrong marker prefix' production_claim_verdict_table_holds
+reject_223_mutant INV-223-ONE-LAUNCH-PER-DAY launch-marker-blinded \
+  launch-marker-blinded.sh "$transport" \
+  's/launch-consumed\\ head=/launch-blind\\ head=/g' \
+  'launch-blind\ head=' \
+  'a launch claim scan blind to consumed markers' production_claim_verdict_table_holds
+
+# F5: remove each modeled receipt artifact and require executing evidence to fail.
+# The mutation expressions intentionally match literal shell variable syntax.
+# shellcheck disable=SC2016
+reject_223_mutant INV-223-HEAD-CROSSES-PROCESS receipt-workflow-head-removed \
+  receipt-workflow-head-removed.sh "$controller" \
+  '/^receipt\[workflow_head\]=\$head$/d' \
+  '!receipt[workflow_head]=$head' \
+  'a controller that omits workflow_head receipts' receipt_model_mutant_rejected
+# shellcheck disable=SC2016
+reject_223_mutant INV-223-PRELAUNCH-SUPERSEDE receipt-supersedes-removed \
+  receipt-supersedes-removed.sh "$controller" \
+  '/receipt\[claim_supersedes\]=\$previous_head/d' \
+  '!receipt[claim_supersedes]=$previous_head' \
+  'a controller that omits claim_supersedes receipts' receipt_model_mutant_rejected
+reject_223_mutant INV-223-ONE-LAUNCH-PER-DAY receipt-launch-claim-removed \
+  receipt-launch-claim-removed.sh "$controller" \
+  '/^  receipt\[launch_claim\]=consumed$/d' \
+  '!receipt[launch_claim]=consumed' \
+  'a controller that omits launch_claim receipts' receipt_model_mutant_rejected
+reject_223_mutant INV-223-ONE-LAUNCH-PER-DAY receipt-launch-cap-write-removed \
+  receipt-launch-cap-write-removed.sh "$controller" \
+  '/^  write_receipt launch-cap CLAIMED$/d' \
+  '!write_receipt launch-cap CLAIMED' \
+  'a controller that never durably writes the launch-cap receipt' receipt_model_mutant_rejected
+
+allowed_path_count=${#issue_223_allowed_paths[@]}
+changed_paths_output=$(git -C "$repo_root" diff --name-only "$pre_slice_base" --) ||
+  fail 'history baseline path diff is unreadable'
+mapfile -t changed_paths < <(printf '%s' "$changed_paths_output")
+paths_within_223_fence "${changed_paths[@]}" || fail 'changed path outside #223 fence'
+scope_mutant_paths=("${changed_paths[@]}" outside/issue-223-mutant)
+[ "${#scope_mutant_paths[@]}" -eq $((${#changed_paths[@]} + 1)) ] ||
+  fail 'scope path mutation did not apply'
+if paths_within_223_fence "${scope_mutant_paths[@]}"; then
+  fail 'scope fence accepted an out-of-scope path'
+fi
+register_223_mutant INV-223-SCOPE-AND-EFFECT-FENCE scope-path-outside-fence
+
+# Derive the effect fence from artifacts produced by the executing harness.
+mapfile -t issue_223_effect_artifacts < <(
+  find "$tmp_root" -type f \( -name transport.log -o -name gh.log -o -name effects \)
+)
+forbidden_effects=0
+credential_material_hits=0
+for effect_artifact in "${issue_223_effect_artifacts[@]}"; do
+  for forbidden in 'gh workflow run' 'repo clone' 'pr create' 'pr merge' 'run watch'; do
+    if grep -Fq -- "$forbidden" "$effect_artifact"; then
+      forbidden_effects=$((forbidden_effects + 1))
+    fi
+  done
+  for credential_sentinel in "$secret_value" "$prod_id" "$prod_app" "$prod_key"; do
+    if grep -Fq -- "$credential_sentinel" "$effect_artifact"; then
+      credential_material_hits=$((credential_material_hits + 1))
+    fi
+  done
+done
+[ "$forbidden_effects" -eq 0 ] || fail "effect fence observed $forbidden_effects forbidden effects"
+[ "$credential_material_hits" -eq 0 ] ||
+  fail "effect fence observed $credential_material_hits credential material hits"
+
+# The census itself is executable: registry drift or an untested invariant fails.
+mapfile -t registered_mutants < <(printf '%s\n' "${!issue_223_mutant_invariant[@]}" | sort)
+mapfile -t declared_mutants < <(printf '%s\n' "${issue_223_declared_mutants[@]}" | sort)
+proof_residuals=$(comm -3 \
+  <(printf '%s\n' "${registered_mutants[@]}") \
+  <(printf '%s\n' "${declared_mutants[@]}") | grep -c . || true)
+[ "$proof_residuals" -eq 0 ] ||
+  fail "#223 mutant registry drift: registered=${registered_mutants[*]} declared=${declared_mutants[*]}"
+for invariant in "${issue_223_declared_invariants[@]}"; do
+  invariant_mutants=0
+  for mutant in "${registered_mutants[@]}"; do
+    [ "${issue_223_mutant_invariant[$mutant]}" = "$invariant" ] &&
+      invariant_mutants=$((invariant_mutants + 1))
+  done
+  [ "$invariant_mutants" -gt 0 ] || fail "invariant has no rejecting mutant: $invariant"
+done
+
+# Re-run the live observations after mutant predicates so all reported counts
+# are measurements of the candidate, never side effects left by a rejected mutant.
+routing_truth_table_holds "$workflow" || fail 'final routing census failed'
+census_failure_holds "$transport" || fail 'final marker census failed'
+effect_order_holds "$controller" || fail 'final effect-order census failed'
+claim_verdict_observations=()
+claim_verdict_table_holds "$transport" production || fail 'final production verdict census failed'
+claim_verdict_table_holds "$fake_transport" fixture || fail 'final fixture verdict census failed'
+receipt_model_holds "$controller" || fail 'final receipt-model census failed'
+claim_operation_count=$(claim_operations "$transport" | grep -c . || true)
+production_jobs=$(grep -Ec '^  daily-amaru-scheduled:$' "$workflow" || true)
+controller_callers=$(grep -Ec '^[[:space:]]+scripts/daily-amaru[.]sh$' "$workflow" || true)
+launches_per_day=${launch_scenario_launches[0]}
+for launches in "${launch_scenario_launches[@]}"; do
+  [ "$launches" -eq "$launches_per_day" ] || fail 'launch scenario counts disagree'
+done
+routing_mutants=0
+dry_run_mutants=0
+launch_cap_mutants=0
+for mutant in "${registered_mutants[@]}"; do
+  case "${issue_223_mutant_invariant[$mutant]}" in
+    INV-223-DISPATCH-ROUTING) routing_mutants=$((routing_mutants + 1)) ;;
+    INV-223-DRY-RUN-BYTE-UNCHANGED) dry_run_mutants=$((dry_run_mutants + 1)) ;;
+    INV-223-ONE-LAUNCH-PER-DAY) launch_cap_mutants=$((launch_cap_mutants + 1)) ;;
+  esac
+done
+printf 'DISPATCH-ROUTING rows=%s production_jobs=%s controller_callers=%s mutants_rejected=%s\n' \
+  "${#routing_census_rows[@]}" "$production_jobs" "$controller_callers" \
+  "$routing_mutants"
+printf 'DRY-RUN-BYTE-IDENTITY base=%s current=%s mutants_rejected=%s\n' \
+  "$base_dry_hash" "$current_dry_hash" "$dry_run_mutants"
+printf 'LAUNCH-CAP trigger_pairs=%s launches_per_day=%s refusal=launch-consumed ordered_claim_effect_pairs=%s mutants_rejected=%s\n' \
+  "${#trigger_pairs[@]}" "$launches_per_day" "$ordered_claim_effect_pairs" \
+  "$launch_cap_mutants"
+printf 'PRELAUNCH-SUPERSEDE unchanged=blocked changed=admitted legacy=admitted append_only=1 table_rows=%s\n' \
+  "$claim_verdict_rows_per_backend"
+printf 'CENSUS-FAILS-CLOSED operations=%s positive_controls=%s forced_failures=%s comments_unchanged=%s\n' \
+  "$claim_operation_count" "$census_positive_controls" "$census_forced_failures" \
+  "$census_unchanged_stores"
+printf 'HEAD-PROPAGATION source=GITHUB_SHA claims_observed=%s invalid_heads_refused=%s receipt_keys=%s\n' \
+  "$claim_operation_count" "${#invalid_heads[@]}" "${#receipt_declared_keys[@]}"
+printf 'CLAIM-OPERATION-RECONCILIATION operations=%s matched=1 verdict_observations=%s\n' \
+  "$claim_operation_count" "${#claim_verdict_observations[@]}"
+printf 'HISTORY-BASE-CONTROLS positive_fetches=%s negative_refusals=%s dry_run_checks=%s path_censuses=%s mutants_rejected=1\n' \
+  "$history_positive_fetches" "$history_negative_refusals" \
+  "$history_dry_run_checks" "$history_path_censuses"
+printf 'SCOPE-EFFECT-FENCE changed_paths=%s allowed_paths=%s effect_artifacts=%s forbidden_effects=%s credential_material_hits=%s\n' \
+  "${#changed_paths[@]}" "$allowed_path_count" "${#issue_223_effect_artifacts[@]}" \
+  "$forbidden_effects" "$credential_material_hits"
+printf 'PROOF-CENSUS invariants=%s claim_operations=%s mutants_rejected=%s residuals=%s\n' \
+  "${#issue_223_declared_invariants[@]}" "$claim_operation_count" \
+  "${#registered_mutants[@]}" "$proof_residuals"
+pass issue-223-manual-production-cap
