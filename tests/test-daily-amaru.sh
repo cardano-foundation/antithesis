@@ -7,7 +7,7 @@ transport="$repo_root/scripts/daily-amaru-github.sh"
 workflow="$repo_root/.github/workflows/daily-amaru.yaml"
 fake_transport="$repo_root/tests/fixtures/daily-amaru/fake-transport.sh"
 fake_gh="$repo_root/tests/fixtures/daily-amaru/fake-gh.sh"
-pre_slice_base=cd8144bdd7d3996ccc63e159227a6376e822df2c
+pre_slice_base=01f96e4b1352b2558260e9401e422eaf3136a320
 default_workflow_head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 tmp_root=$(mktemp -d)
 trap 'rm -rf "$tmp_root"' EXIT
@@ -1592,15 +1592,19 @@ issue_223_declared_mutants=(
   scope-path-outside-fence
   history-base-unavailable
 )
-issue_223_allowed_paths=(
-  .github/workflows/daily-amaru.yaml
-  scripts/daily-amaru.sh
+issue_225_allowed_paths=(
   scripts/daily-amaru-github.sh
   tests/test-daily-amaru.sh
-  tests/test-workflow-validation.sh
-  tests/fixtures/daily-amaru/fake-transport.sh
-  tests/fixtures/daily-amaru/fake-gh.sh
-  specs/223-manual-production-trigger/tasks.md
+  tests/fixtures/daily-amaru/boundary-gh.sh
+  tests/fixtures/daily-amaru/boundary-docker.sh
+  tests/fixtures/daily-amaru/boundary-nix.sh
+  tests/fixtures/daily-amaru/test-transport-boundary.sh
+  specs/225-transport-value-channel/data-model.md
+  specs/225-transport-value-channel/functions-model.md
+  specs/225-transport-value-channel/modules-model.md
+  specs/225-transport-value-channel/plan.md
+  specs/225-transport-value-channel/spec.md
+  specs/225-transport-value-channel/tasks.md
 )
 
 register_223_mutant() {
@@ -1846,11 +1850,11 @@ receipt_model_mutant_rejected() {
   receipt_model_holds "$1" 2>/dev/null
 }
 
-paths_within_223_fence() {
+paths_within_slice_fence() {
   local path allowed allowed_path
   for path in "$@"; do
     allowed=0
-    for allowed_path in "${issue_223_allowed_paths[@]}"; do
+    for allowed_path in "${issue_225_allowed_paths[@]}"; do
       [ "$path" = "$allowed_path" ] && allowed=1
     done
     [ "$allowed" -eq 1 ] || return 1
@@ -1890,7 +1894,7 @@ history_base_controls() {
   changed_output=$(git -C "$positive" diff --name-only "$control_base" --) || return 1
   mapfile -t control_paths < <(printf '%s' "$changed_output")
   [ "${#control_paths[@]}" -gt 0 ] || return 1
-  paths_within_223_fence "${control_paths[@]}" || return 1
+  paths_within_slice_fence "${control_paths[@]}" || return 1
 
   git clone --quiet --depth=1 --single-branch --branch main \
     "file://$origin" "$negative" || return 1
@@ -2180,15 +2184,15 @@ reject_223_mutant INV-223-ONE-LAUNCH-PER-DAY receipt-launch-cap-write-removed \
   '!write_receipt launch-cap CLAIMED' \
   'a controller that never durably writes the launch-cap receipt' receipt_model_mutant_rejected
 
-allowed_path_count=${#issue_223_allowed_paths[@]}
+allowed_path_count=${#issue_225_allowed_paths[@]}
 changed_paths_output=$(git -C "$repo_root" diff --name-only "$pre_slice_base" --) ||
   fail 'history baseline path diff is unreadable'
 mapfile -t changed_paths < <(printf '%s' "$changed_paths_output")
-paths_within_223_fence "${changed_paths[@]}" || fail 'changed path outside #223 fence'
-scope_mutant_paths=("${changed_paths[@]}" outside/issue-223-mutant)
+paths_within_slice_fence "${changed_paths[@]}" || fail 'changed path outside #225 fence'
+scope_mutant_paths=("${changed_paths[@]}" outside/issue-225-mutant)
 [ "${#scope_mutant_paths[@]}" -eq $((${#changed_paths[@]} + 1)) ] ||
   fail 'scope path mutation did not apply'
-if paths_within_223_fence "${scope_mutant_paths[@]}"; then
+if paths_within_slice_fence "${scope_mutant_paths[@]}"; then
   fail 'scope fence accepted an out-of-scope path'
 fi
 register_223_mutant INV-223-SCOPE-AND-EFFECT-FENCE scope-path-outside-fence
@@ -2285,3 +2289,8 @@ printf 'PROOF-CENSUS invariants=%s claim_operations=%s mutants_rejected=%s resid
   "${#issue_223_declared_invariants[@]}" "$claim_operation_count" \
   "${#registered_mutants[@]}" "$proof_residuals"
 pass issue-223-manual-production-cap
+
+# Issue #225: execute the real transport at a local git boundary. The focused
+# fixture owns its repositories under mktemp and never reads this checkout's
+# history.
+"$repo_root/tests/fixtures/daily-amaru/test-transport-boundary.sh" "$repo_root" all
