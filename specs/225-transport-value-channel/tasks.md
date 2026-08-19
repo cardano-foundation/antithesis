@@ -25,3 +25,6 @@ Bisect-safe as one unit (`plan.md`, "Ordered work").
 - [ ] T225-08 Preservation proof: `receipt_keys` and the controller's validation
       regexes unchanged; existing effect censuses still honest; no real launch
       (INV-225-C1..C3).
+- [ ] T225-09 Re-base the daily-loop scope fence to this slice's pre-slice base
+      and allow-list, keeping the `scope-path-outside-fence` mutant rejected and
+      `dry_run_steps_identical` green (INV-225-D1).

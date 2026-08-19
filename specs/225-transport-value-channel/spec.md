@@ -86,3 +86,18 @@ Each must be proved able to fail. "Fails when" is the observable red.
 | INV-225-C1 | One code path for `schedule` and `workflow_dispatch` | a probe-only fork or a mode-conditional branch appears in the proposal path | the existing routing proof stays green with no new mode conditional |
 | INV-225-C2 | No real Antithesis launch from tests | any proof reaches a real workflow dispatch | the effect censuses record zero real launches |
 | INV-225-C3 | #210 receipts preserved | `receipt_keys`, a stage name, or a controller validation regex changes | the receipt field set and order are identical to base `01f96e4` |
+
+## Discovered constraint — the inherited scope fence
+
+`tests/test-daily-amaru.sh` carries `issue_223_allowed_paths`, an allow-list of
+every path permitted to differ from `pre_slice_base=cd8144b`. It was frozen for
+#223 and now judges #225's tree: the planning commit alone reds it with
+`changed path outside #223 fence`.
+
+| ID | Invariant | Fails when | Holds when |
+|---|---|---|---|
+| INV-225-D1 | The daily-loop scope fence judges **this** slice, not a merged one | the fence's base or allow-list still describes #223, so a correct #225 candidate is rejected by construction; or the fence is weakened into something that cannot reject an out-of-scope path | the base is this slice's pre-slice base `01f96e4`, the allow-list is exactly the paths this slice changes, the existing `scope-path-outside-fence` mutant is still rejected, and `dry_run_steps_identical` still holds against the new base |
+
+Re-basing the fence per slice is in scope for this campaign. Growing the
+allow-list against an ever-older base is not: it would make the fence weaker
+every ticket. Identifier naming is the commit owner's choice.
