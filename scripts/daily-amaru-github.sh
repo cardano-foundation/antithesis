@@ -81,14 +81,14 @@ claim_prelaunch_marker() {
   local current_prefix previous_head='' recorded_head='' found=0
 
   if ! census=$(marker_census); then # census-fails-closed
-    printf 'BLOCKED census-unreadable\n'
+    emit 'BLOCKED census-unreadable'
     return 1
   fi
 
   if [ "$kind" = day ]; then
     while IFS= read -r line; do
       if [[ "$line" =~ ^\<\!--\ daily-amaru\ day="$value"\ launch-consumed\ head=[0-9a-f]{40}\ --\>$ ]]; then
-        printf 'BLOCKED launch-consumed\n'
+        emit 'BLOCKED launch-consumed'
         return 1 # launch-consumed-final
       fi
     done <<<"$census"
@@ -114,7 +114,7 @@ claim_prelaunch_marker() {
       found=1
       previous_head=$recorded_head
       if [ "$recorded_head" = "$head" ]; then # unchanged-head-guard
-        printf 'BLOCKED unchanged-head\n'
+        emit 'BLOCKED unchanged-head'
         return 1
       fi
     fi
@@ -122,9 +122,9 @@ claim_prelaunch_marker() {
 
   comment_issue "$marker"
   if [ "$found" -eq 0 ]; then
-    printf 'CLAIMED\n'
+    emit 'CLAIMED'
   else
-    printf 'SUPERSEDED previous-head=%s\n' "$previous_head"
+    emit "SUPERSEDED previous-head=$previous_head"
   fi
 }
 
@@ -174,14 +174,66 @@ create_or_find_pr() {
 
   if ! url=$(with_identity "$identity" gh pr create -R "$target_repository" \
     --base main --head "$branch" --title "$title" --body "$body" 2>/dev/null); then
-    url=$(with_identity "$identity" gh pr view "$branch" -R "$target_repository" \
-      --json url --jq .url)
+    url=$(find_pr "$target_repository" "$branch" "$identity")
   fi
   printf '%s\n' "$url"
 }
 
+find_pr() {
+  local target_repository=$1
+  local branch=$2
+  local identity=$3
+
+  with_identity "$identity" gh pr view "$branch" -R "$target_repository" \
+    --json url --jq .url
+}
+
+classify_proposal_branch() {
+  local directory=$1
+  local branch=$2
+  local upstream_sha=$3
+  local input_node=$4
+  local remote_ref="refs/remotes/origin/$branch"
+  local merge_base changed_output lock
+  local -a changed=()
+
+  if ! git -C "$directory" show-ref --verify --quiet "$remote_ref"; then
+    printf 'absent\n'
+    return 0
+  fi
+
+  merge_base=$(git -C "$directory" merge-base origin/main "$remote_ref") || return 1
+  changed_output=$(git -C "$directory" diff --name-only "$merge_base" "$remote_ref") ||
+    return 1
+  mapfile -t changed < <(printf '%s' "$changed_output")
+  if [ "${#changed[@]}" -ne 1 ] || [ "${changed[0]}" != flake.lock ]; then
+    printf 'foreign\n'
+    return 0
+  fi
+
+  lock=$(git -C "$directory" show "$remote_ref:flake.lock") || return 1
+  if jq -e --arg node "$input_node" --arg sha "$upstream_sha" '
+      .nodes[$node].original.owner == "pragma-org" and
+      .nodes[$node].original.repo == "amaru" and
+      .nodes[$node].locked.rev == $sha
+    ' <<<"$lock" >/dev/null; then
+    printf 'adoptable\n'
+  else
+    printf 'foreign\n'
+  fi
+}
+
 operation=${1:?transport operation is required}
 shift
+
+# Reserve the caller's stdout once, then make ordinary stdout diagnostic for
+# the complete dispatch. Only emit can reach the operation-value channel.
+exec {value_fd}>&1
+exec 1>&2
+
+emit() {
+  printf '%s\n' "$@" >&"$value_fd"
+}
 
 case "$operation" in
   preflight)
@@ -193,12 +245,11 @@ case "$operation" in
     fi
     for command in "${requirements[@]}"; do
       if ! command -v "$command" >/dev/null 2>&1; then
-        printf 'MISSING-COMMAND %s\n' "$command"
+        emit "MISSING-COMMAND $command"
         die "missing command: $command"
       fi
     done
-    printf 'OK: %s scheduled dependencies present: %s\n' \
-      "${#requirements[@]}" "${requirements[*]}"
+    emit "OK: ${#requirements[@]} scheduled dependencies present: ${requirements[*]}"
     ;;
 
   claim-day)
@@ -217,16 +268,17 @@ case "$operation" in
     ref=${2:?ref is required}
     git ls-remote --heads "$origin" "$ref" |
       while IFS=$'\t' read -r sha observed_ref; do
-        printf '%s|%s|%s\n' "$origin" "$observed_ref" "$sha"
+        emit "$origin|$observed_ref|$sha"
       done
     ;;
 
   last-success-sha)
     # repository-token-permissions: issues=read
     require_commands gh sed tail
-    issue_bodies |
+    last_success=$(issue_bodies |
       sed -nE 's/^<!-- daily-amaru last-success sha=([0-9a-f]{40}) -->$/\1/p' |
-      tail -n 1
+      tail -n 1)
+    [ -z "$last_success" ] || emit "$last_success"
     ;;
 
   claim-sha-attempt)
@@ -247,17 +299,17 @@ case "$operation" in
     [[ "$day" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || die "invalid UTC day: $day"
     validate_head "$head"
     if ! census=$(marker_census); then # census-fails-closed
-      printf 'BLOCKED census-unreadable\n'
+      emit 'BLOCKED census-unreadable'
       exit 1
     fi
     while IFS= read -r line; do
       if [[ "$line" =~ ^\<\!--\ daily-amaru\ day="$day"\ launch-consumed\ head=[0-9a-f]{40}\ --\>$ ]]; then
-        printf 'BLOCKED launch-consumed\n'
+        emit 'BLOCKED launch-consumed'
         exit 1 # launch-consumed-final
       fi
     done <<<"$census"
     comment_issue "<!-- daily-amaru day=$day launch-consumed head=$head -->"
-    printf 'CLAIMED\n'
+    emit 'CLAIMED'
     ;;
 
   propose-bootstrap)
@@ -269,7 +321,6 @@ case "$operation" in
 
     [ ! -e "$directory" ] || die "bootstrap workspace already exists: $directory"
     with_identity "$bootstrap_identity" gh repo clone "$bootstrap_repository" "$directory" -- --filter=blob:none
-    git -C "$directory" checkout -b "$branch" origin/main
 
     # TODO(amaru-bootstrap#75): replace this crude stock-pin proposal with
     # the validated producer handoff once that contract lands.
@@ -287,30 +338,48 @@ case "$operation" in
     ' "$directory/flake.lock")
     [ -n "$input_name" ] || die 'expected exactly one root input for the stock Amaru node'
 
-    (
-      cd "$directory"
-      nix flake lock --override-input "$input_name" "github:pragma-org/amaru/$upstream_sha"
-    )
-    mapfile -t changed < <(git -C "$directory" diff --name-only)
-    [ "${#changed[@]}" -eq 1 ] && [ "${changed[0]}" = flake.lock ] ||
-      die 'stock-pin proposal changed a path other than flake.lock'
-    jq -e --arg node "$input_node" --arg sha "$upstream_sha" '
-      .nodes[$node].original.owner == "pragma-org" and
-      .nodes[$node].original.repo == "amaru" and
-      .nodes[$node].locked.rev == $sha
-    ' "$directory/flake.lock" >/dev/null || die 'stock Amaru lock validation failed'
+    proposal_state=$(classify_proposal_branch \
+      "$directory" "$branch" "$upstream_sha" "$input_node") ||
+      die 'proposal branch classification failed'
+    case "$proposal_state" in
+      adoptable)
+        bootstrap_head=$(git -C "$directory" rev-parse "refs/remotes/origin/$branch")
+        pr_url=$(find_pr "$bootstrap_repository" "$branch" "$bootstrap_identity")
+        printf '%s\n' "$pr_url" >"$state_dir/bootstrap-pr"
+        emit "$bootstrap_head"
+        ;;
+      foreign)
+        die 'foreign-proposal-branch'
+        ;;
+      absent)
+        git -C "$directory" checkout -b "$branch" origin/main
+        (
+          cd "$directory"
+          nix flake lock --override-input "$input_name" "github:pragma-org/amaru/$upstream_sha"
+        )
+        mapfile -t changed < <(git -C "$directory" diff --name-only)
+        [ "${#changed[@]}" -eq 1 ] && [ "${changed[0]}" = flake.lock ] ||
+          die 'stock-pin proposal changed a path other than flake.lock'
+        jq -e --arg node "$input_node" --arg sha "$upstream_sha" '
+          .nodes[$node].original.owner == "pragma-org" and
+          .nodes[$node].original.repo == "amaru" and
+          .nodes[$node].locked.rev == $sha
+        ' "$directory/flake.lock" >/dev/null || die 'stock Amaru lock validation failed'
 
-    git -C "$directory" add flake.lock
-    git -C "$directory" -c user.name='daily-amaru' \
-      -c user.email='daily-amaru@users.noreply.github.com' \
-      commit -m "chore: bump stock Amaru to $upstream_sha"
-    push_branch "$directory" "$branch" "$bootstrap_identity"
-    pr_url=$(create_or_find_pr "$bootstrap_repository" "$branch" \
-      "chore: bump stock Amaru to ${upstream_sha:0:12}" \
-      "Daily Amaru controller proposal for exact upstream $upstream_sha." \
-      "$bootstrap_identity")
-    printf '%s\n' "$pr_url" >"$state_dir/bootstrap-pr"
-    git -C "$directory" rev-parse HEAD
+        git -C "$directory" add flake.lock
+        git -C "$directory" -c user.name='daily-amaru' \
+          -c user.email='daily-amaru@users.noreply.github.com' \
+          commit -m "chore: bump stock Amaru to $upstream_sha"
+        push_branch "$directory" "$branch" "$bootstrap_identity"
+        pr_url=$(create_or_find_pr "$bootstrap_repository" "$branch" \
+          "chore: bump stock Amaru to ${upstream_sha:0:12}" \
+          "Daily Amaru controller proposal for exact upstream $upstream_sha." \
+          "$bootstrap_identity")
+        printf '%s\n' "$pr_url" >"$state_dir/bootstrap-pr"
+        emit "$(git -C "$directory" rev-parse HEAD)"
+        ;;
+      *) die "invalid proposal branch classification: $proposal_state" ;;
+    esac
     ;;
 
   require-bootstrap-checks)
@@ -325,7 +394,7 @@ case "$operation" in
         <<<"$rows")
       [ "$count" -eq 1 ] || die "bootstrap check is not uniquely successful on $candidate: $name"
     done
-    printf '%s\n' "$rows"
+    emit "$rows"
     ;;
 
   resolve-image)
@@ -335,7 +404,7 @@ case "$operation" in
     digest=$(docker buildx imagetools inspect "$image_tag" \
       --format '{{json .Manifest.Digest}}' | tr -d '"')
     [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || die "invalid registry digest: $digest"
-    printf '%s@%s\n' "$image_tag" "$digest"
+    emit "$image_tag@$digest"
     ;;
 
   prepare-consumer-repin)
@@ -373,7 +442,7 @@ case "$operation" in
       "Daily Amaru controller repin to $image_ref. Integration is lane-supervised." \
       "$repository_identity")
     printf '%s\n' "$pr_url" >"$state_dir/consumer-pr"
-    git -C "$directory" rev-parse HEAD
+    emit "$(git -C "$directory" rev-parse HEAD)"
     ;;
 
   require-consumer-checks)
@@ -392,7 +461,7 @@ case "$operation" in
       [ "$count" -eq 1 ] ||
         die "consumer check is not uniquely successful on $candidate: $workflow / $name"
     done
-    printf '%s\n' "$rows"
+    emit "$rows"
     ;;
 
   run-producer-check)
@@ -401,10 +470,12 @@ case "$operation" in
     directory=$state_dir/consumer
     [ "$(git -C "$directory" rev-parse HEAD)" = "$candidate" ] ||
       die 'consumer workspace is not at the exact candidate head'
-    (
+    producer_evidence=$(
       cd "$directory"
       scripts/check-amaru-producer-image-refs.sh
     )
+    printf '%s\n' "$producer_evidence" >&2
+    emit "$producer_evidence"
     ;;
 
   await-supervised-integration)
@@ -425,7 +496,7 @@ case "$operation" in
     main_head=$(with_identity "$repository_identity" gh api "repos/$repository/git/ref/heads/main" \
       --jq .object.sha)
     [ "$main_head" = "$merged" ] || die 'merged consumer commit is not exact current main'
-    printf '%s\n' "$merged"
+    emit "$merged"
     ;;
 
   fake-launch)
@@ -434,8 +505,7 @@ case "$operation" in
     duration=${3:?duration is required}
     no_faults=${4:?fault setting is required}
     integrated=${5:?integrated SHA is required}
-    printf 'fake://%s/%s/%s/%s/%s\n' \
-      "$workflow" "$testnet" "$duration" "$no_faults" "$integrated"
+    emit "fake://$workflow/$testnet/$duration/$no_faults/$integrated"
     ;;
 
   real-launch)
@@ -466,7 +536,7 @@ case "$operation" in
     done
     [ -n "$run_id" ] || die 'launched workflow run was not observable'
     with_identity "$repository_identity" gh run watch "$run_id" -R "$repository" --exit-status
-    printf 'https://github.com/%s/actions/runs/%s\n' "$repository" "$run_id"
+    emit "https://github.com/$repository/actions/runs/$run_id"
     ;;
 
   receipt)
