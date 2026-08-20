@@ -8,7 +8,7 @@ workflow="$repo_root/.github/workflows/daily-amaru.yaml"
 fake_transport="$repo_root/tests/fixtures/daily-amaru/fake-transport.sh"
 fake_gh="$repo_root/tests/fixtures/daily-amaru/fake-gh.sh"
 pre_slice_base=01f96e4b1352b2558260e9401e422eaf3136a320
-s4_base=ecdb2e187d99acecd2c97c7712316d9875443fdb
+s4_base=2e7b35a8b01be73142d648b720654158f16934ae
 default_workflow_head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 tmp_root=$(mktemp -d)
 trap 'rm -rf "$tmp_root"' EXIT
