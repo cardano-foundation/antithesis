@@ -25,6 +25,10 @@ boundary_seeded_count=0
 boundary_standins_verified=0
 boundary_census_ablated=0
 boundary_path_mutants_rejected=0
+guard_forced_failures=0
+guard_named_failures=0
+guard_mutants_rejected=0
+guard_sites=0
 
 upstream_sha=1111111111111111111111111111111111111111
 old_sha=0000000000000000000000000000000000000000
@@ -392,7 +396,7 @@ assert_boundary_census_derivation() {
   local ablation_call line_continuation="\\"
   printf -v ablation_call '    PATH="$%s" assert_pollution_with_remotes %s' \
     host_bin "$line_continuation"
-  before=$(grep -Fxc "$ablation_call" "$0")
+  before=$(grep -Fxc "$ablation_call" "$0" || true)
   [ "$before" -eq 1 ] ||
     fail "census-ablation-removal mutant expected one re-run call, found $before"
   awk -v needle="$ablation_call" '
@@ -404,7 +408,7 @@ assert_boundary_census_derivation() {
     { print }
   ' "$0" >"$mutant"
   chmod +x "$mutant"
-  after=$(grep -c '^    : # MUTANT: census ablation re-run removed$' "$mutant")
+  after=$(grep -c '^    : # MUTANT: census ablation re-run removed$' "$mutant" || true)
   [ "$after" -eq 1 ] &&
     [ "$(grep -Fxc "$ablation_call" "$mutant" || true)" -eq 0 ] ||
     fail 'census-ablation-removal mutation did not apply'
@@ -679,7 +683,7 @@ assert_boundary_marker_derivation() {
   local log="$tmp_root/boundary-verification-removed.log" before after
   local assertion_line
   printf -v assertion_line '  assert_boundary_path "$%s"' expected_bin
-  before=$(grep -Fxc "$assertion_line" "$0")
+  before=$(grep -Fxc "$assertion_line" "$0" || true)
   [ "$before" -eq 1 ] ||
     fail "verification-removal mutant expected one operation-path assertion, found $before"
   awk -v needle="$assertion_line" '
@@ -687,7 +691,7 @@ assert_boundary_marker_derivation() {
     { print }
   ' "$0" >"$mutant"
   chmod +x "$mutant"
-  after=$(grep -c '^  : # MUTANT: operation-path verification removed$' "$mutant")
+  after=$(grep -c '^  : # MUTANT: operation-path verification removed$' "$mutant" || true)
   [ "$after" -eq 1 ] &&
     [ "$(grep -Fxc "$assertion_line" "$mutant" || true)" -eq 0 ] ||
     fail 'verification-removal mutation did not apply'
@@ -696,6 +700,112 @@ assert_boundary_marker_derivation() {
   fi
   grep -Fq 'boundary operation path verified no stand-ins' "$log" ||
     fail "verification-removal mutant failed for the wrong reason: $(tr '\n' ' ' <"$log")"
+}
+
+assert_named_guard_failure() {
+  local label=$1 mutant=$2 mutant_scenario=$3 fingerprint=$4
+  local log="$tmp_root/guard-$label.log"
+  chmod +x "$mutant"
+  if "$mutant" "$repo_root" "$mutant_scenario" >"$log" 2>&1; then
+    fail "guarded failure passed: $label"
+  fi
+  guard_forced_failures=$((guard_forced_failures + 1))
+  if grep -Fq "FAIL: $fingerprint" "$log"; then
+    guard_named_failures=$((guard_named_failures + 1))
+  else
+    fail "guarded failure died without its named diagnostic: $label: $(tr '\n' ' ' <"$log")"
+  fi
+}
+
+guard_site_census() {
+  awk '
+    /^assert_boundary_(census|marker)_derivation\(\) \{$/ { inside = 1; next }
+    inside && /^}$/ { inside = 0; next }
+    inside && /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=\$\(grep -[^ ]*c[[:space:]]/ {
+      sites++
+    }
+    END { print sites + 0 }
+  ' "$1"
+}
+
+assert_guard_diagnostics() {
+  local root="$tmp_root/guard-diagnostics" mutant log
+  local census_call marker_call census_after census_missing marker_after marker_missing
+  mkdir -p "$root"
+  guard_sites=$(guard_site_census "$0")
+  [ "$guard_sites" -gt 0 ] || fail 'guard-site census found no derivation guards'
+  printf -v census_call '    PATH="$%s" assert_pollution_with_remotes %s' \
+    host_bin "\\"
+  printf -v marker_call '  assert_boundary_path "$%s"' expected_bin
+  census_after="  after=\$(grep -c '^    : # MUTANT: census ablation re-run removed$' \"\$mutant\" || true)"
+  census_missing="  after=\$(grep -c '^    : # MUTANT: missing census marker$' \"\$mutant\" || true)"
+  marker_after="  after=\$(grep -c '^  : # MUTANT: operation-path verification removed$' \"\$mutant\" || true)"
+  marker_missing="  after=\$(grep -c '^  : # MUTANT: missing verification marker$' \"\$mutant\" || true)"
+
+  "$0" "$repo_root" guard-census-derivation >"$root/census-positive.log" 2>&1 ||
+    fail 'census guard positive control failed'
+  "$0" "$repo_root" guard-marker-derivation >"$root/marker-positive.log" 2>&1 ||
+    fail 'marker guard positive control failed'
+
+  mutant="$root/census-before-zero.sh"
+  awk -v needle="$census_call" '$0 != needle { print }' "$0" >"$mutant"
+  ! grep -Fqx "$census_call" "$mutant" || fail 'census-before-zero mutation did not apply'
+  assert_named_guard_failure census-before "$mutant" guard-census-derivation \
+    'census-ablation-removal mutant expected one re-run call, found 0'
+
+  mutant="$root/census-after-zero.sh"
+  awk -v needle="$census_after" -v replacement="$census_missing" '
+    $0 == needle { print replacement; changed++; next }
+    { print }
+    END { if (changed != 1) exit 42 }
+  ' "$0" >"$mutant"
+  grep -Fqx "$census_missing" "$mutant" || fail 'census-after-zero mutation did not apply'
+  assert_named_guard_failure census-after "$mutant" guard-census-derivation \
+    'census-ablation-removal mutation did not apply'
+
+  mutant="$root/marker-before-zero.sh"
+  awk -v needle="$marker_call" '$0 != needle { print }' "$0" >"$mutant"
+  ! grep -Fqx "$marker_call" "$mutant" || fail 'marker-before-zero mutation did not apply'
+  assert_named_guard_failure marker-before "$mutant" guard-marker-derivation \
+    'verification-removal mutant expected one operation-path assertion, found 0'
+
+  mutant="$root/marker-after-zero.sh"
+  awk -v needle="$marker_after" -v replacement="$marker_missing" '
+    $0 == needle { print replacement; changed++; next }
+    { print }
+    END { if (changed != 1) exit 42 }
+  ' "$0" >"$mutant"
+  grep -Fqx "$marker_missing" "$mutant" || fail 'marker-after-zero mutation did not apply'
+  assert_named_guard_failure marker-after "$mutant" guard-marker-derivation \
+    'verification-removal mutation did not apply'
+
+  mutant="$root/bare-guard-restored.sh"
+  awk -v needle="$census_call" '
+    $0 == "  before=$(grep -Fxc \"$ablation_call\" \"$0\" || true)" {
+      print "  before=$(grep -Fxc \"$ablation_call\" \"$0\")"
+      changed++
+      next
+    }
+    $0 == needle { next }
+    { print }
+    END { if (changed != 1) exit 42 }
+  ' "$0" >"$mutant"
+  chmod +x "$mutant"
+  # shellcheck disable=SC2016
+  grep -Fqx '  before=$(grep -Fxc "$ablation_call" "$0")' "$mutant" ||
+    fail 'bare-guard restoration mutant did not apply'
+  log="$root/bare-guard-restored.log"
+  if "$mutant" "$repo_root" guard-census-derivation >"$log" 2>&1; then
+    fail 'bare-guard restoration mutant passed'
+  fi
+  if grep -q '^FAIL:' "$log"; then
+    fail "bare-guard restoration mutant did not reproduce a silent death: $(tr '\n' ' ' <"$log")"
+  fi
+  guard_mutants_rejected=$((guard_mutants_rejected + 1))
+  [ "$guard_forced_failures" -eq "$guard_sites" ] ||
+    fail "guard census found $guard_sites sites but forced $guard_forced_failures"
+  [ "$guard_named_failures" -eq "$guard_forced_failures" ] ||
+    fail "guard proof forced $guard_forced_failures failures but named $guard_named_failures"
 }
 
 reject_scenario_mutant() {
@@ -783,12 +893,16 @@ case "$scenario" in
     assert_boundary_path_mutants
     assert_boundary_marker_derivation
     assert_boundary_census_derivation
+    assert_guard_diagnostics
     printf 'VALUE-CHANNEL operations=%s executed=%s census=complete mutants_rejected=%s\n' \
       "$value_operation_count" "$value_executed_count" "$value_mutants_rejected"
     printf 'VALUE-CHANNEL-FIRED reproduced=malformed-candidate-sha real_git=1 real_transport=1\n'
     printf 'PROPOSAL-REATTEMPT adopt=1 foreign=1 fresh=1 mutants_rejected=4\n'
     print_boundary_path_marker
     printf 'BOUNDARY-PATH-DERIVED verification_removed=rejected seed_fabricated=rejected relative_root=rejected census_ablation_removed=rejected\n'
+    printf 'GUARD-DIAGNOSTICS sites=%s forced=%s named=%s mutants_rejected=%s\n' \
+      "$guard_sites" "$guard_forced_failures" "$guard_named_failures" \
+      "$guard_mutants_rejected"
     ;;
   ablation)
     assert_pollution_closed ablation-control
@@ -799,6 +913,12 @@ case "$scenario" in
     prepare_case marker
     run_boundary_command "$bin" "$bin/bash" -c :
     print_boundary_path_marker
+    ;;
+  guard-census-derivation)
+    assert_boundary_census_derivation
+    ;;
+  guard-marker-derivation)
+    assert_boundary_marker_derivation
     ;;
   *) fail "unknown scenario: $scenario" ;;
 esac

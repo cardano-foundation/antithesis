@@ -179,3 +179,51 @@ it keeps coming back.
 The intact code does perform the 15 re-runs — the 792→462 drop is the evidence.
 This slice does not add coverage; it makes the marker require the coverage that
 already happens, so a later edit cannot quietly remove it.
+
+## Slice S4 — the proof job runs the canonical entry, and guards speak
+
+`2e7b35a` is red in CI a second time, with a **different** cause from
+`7c56594`'s. The `rg` dependency is genuinely fixed — proved by a controlled
+experiment seeding every dev-shell command except `rg` (full suite, exit 0). The
+new failure exits 1 six seconds after `RECEIPT-SCHEMA` with **no `FAIL:` line at
+all**, so the runner cannot tell us why.
+
+Two causes, one slice, because part 1 is what makes any future part-2 red
+legible.
+
+### The swallowing mechanism
+
+The S3 audit recorded it in advance as advisory F-2: `x=$(grep -c …)` under
+`set -euo pipefail`. `grep -c` exits 1 on a zero count, so the **assignment**
+kills the shell before the `fail` it guards can print — the diagnostic is
+unreachable in exactly the case it was written for.
+
+### The environment gap
+
+Every local run in this ticket happens inside `nix develop`; the CI dry-run job
+runs the suite bare. The suite is green in both environments on this host (bare
+`awk` here is the same gawk 5.3.2), so the runner's toolchain is a variable this
+ticket never controlled and cannot reproduce.
+
+Epic ruling A-001, option (a): **the dry-run job runs the suite through the same
+entry `just ci` uses.** The suite's job is to prove controller logic, not
+ubuntu-toolchain compatibility — runner dependencies are already certified by the
+#213 preflight with its own fail-closed RED, and duplicating that duty inside the
+harness is the seam class this epic is already tracking. The hermetic principle
+extends from commands to interpreters: pin them, do not prove against whatever a
+host ships. The production job's environment is untouched.
+
+| ID | Invariant | Fails when | Holds when |
+|---|---|---|---|
+| INV-225-F1 | A guarded failure prints its diagnosis | a guard's input comes from a command substitution that can exit non-zero, so under `set -e` the process dies before the `fail` runs | forcing each guarded zero-count condition produces a `FAIL:` line naming it, and a mutant restoring the bare `$(grep -c …)` shape reproduces a silent death |
+| INV-225-F2 | The proof job runs the canonical proof entry | the dry-run job invokes the suite through an environment other than the one `just ci` uses | the dry-run job provisions the dev shell and runs the canonical entry, and a mutant pointing it elsewhere is rejected |
+| INV-225-F3 (versions the #219/#223 dry-run guarantee) | The dry-run path is not tampered with by production-trigger work | the guarantee is asserted as "byte-identical to a base commit" while the path is deliberately being changed, so a correct candidate is rejected by construction | the guarantee is expressed against the **canonical entry** rather than a frozen byte image, and its tamper mutant is still rejected |
+
+INV-225-F3 is the same lesson as the #223 scope fence, one layer up: a guarantee
+frozen as a byte image of the old world cannot judge the new one. The tamper
+protection is kept; only its expression changes.
+
+Fetch cost, per the ruling's implementation constraint: no new cost to report.
+The production job in this same workflow already provisions the dev shell through
+`paolino/dev-assets/setup-nix@v0.0.1` with cachix, so the dry-run job reuses a
+path this workflow already pays for.

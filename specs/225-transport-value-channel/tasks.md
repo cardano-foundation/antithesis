@@ -49,3 +49,16 @@ Slice `S3` — the ablation count must be the ablation.
 
 - [x] T225-15 Derive `census_ablated` from the ablation re-run itself, and prove
       it with a mutant that deletes the re-run and reds the run (INV-225-E3).
+
+Slice `S4` — canonical proof entry, and guards that speak.
+
+- [x] T225-16 Every `x=$(grep -c …)`-shaped guard feeding a `fail` tolerates the
+      zero count, so the diagnostic it guards is reachable; forced failures print
+      a named `FAIL:` line and a mutant restoring the bare shape reproduces a
+      silent death (INV-225-F1).
+- [x] T225-17 The dry-run job provisions the dev shell and runs the canonical
+      `just ci` entry; the production job's environment is untouched
+      (INV-225-F2).
+- [x] T225-18 Version the #219/#223 dry-run tamper guarantee from a frozen byte
+      image to the canonical entry, keeping its tamper mutant rejected, and add
+      the workflow to the slice fence allow-list (INV-225-F3, INV-225-D1).

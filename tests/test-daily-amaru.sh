@@ -8,6 +8,7 @@ workflow="$repo_root/.github/workflows/daily-amaru.yaml"
 fake_transport="$repo_root/tests/fixtures/daily-amaru/fake-transport.sh"
 fake_gh="$repo_root/tests/fixtures/daily-amaru/fake-gh.sh"
 pre_slice_base=01f96e4b1352b2558260e9401e422eaf3136a320
+s4_base=ecdb2e187d99acecd2c97c7712316d9875443fdb
 default_workflow_head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 tmp_root=$(mktemp -d)
 trap 'rm -rf "$tmp_root"' EXIT
@@ -362,15 +363,51 @@ routing_holds() {
   grep -Fqx '  cancel-in-progress: false' "$file" || return 1
 }
 
-dry_run_steps_identical() {
+workflow_job() {
+  awk -v job="  $2:" '
+    $0 == job { inside = 1 }
+    inside && $0 != job && /^  [A-Za-z0-9_-]+:/ { exit }
+    inside { print }
+  ' "$1"
+}
+
+production_job_untouched() {
   local file=$1 repository=${2:-$repo_root}
-  local base_commit=${3:-$pre_slice_base}
-  local base_workflow=$tmp_root/pre-slice-workflow.yaml
+  local base_commit=${3:-$s4_base}
+  local base_workflow=$tmp_root/canonical-entry-base-workflow.yaml
+  ensure_history_commit "$repository" "$base_commit" || return 1
   git -C "$repository" show \
     "$base_commit:.github/workflows/daily-amaru.yaml" >"$base_workflow" || return 1
   cmp -s \
-    <(workflow_job_steps "$file" daily-amaru-dry-run) \
-    <(workflow_job_steps "$base_workflow" daily-amaru-dry-run)
+    <(workflow_job "$file" daily-amaru-scheduled) \
+    <(workflow_job "$base_workflow" daily-amaru-scheduled)
+}
+
+canonical_dry_run_steps() {
+  # shellcheck disable=SC2016
+  printf '%s\n' \
+    '    steps:' \
+    '      - name: Check out the exact candidate' \
+    '        uses: actions/checkout@v6' \
+    '        with:' \
+    '          ref: ${{ github.event.pull_request.head.sha }}' \
+    '      - uses: paolino/dev-assets/setup-nix@v0.0.1' \
+    '        with:' \
+    '          cachix-auth-token: "${{ secrets.CACHIX_AUTH_TOKEN }}"' \
+    '      - name: Run the canonical proof entry' \
+    '        run: nix develop --quiet -c just ci'
+}
+
+canonical_dry_run_entry_holds() {
+  local file=$1 repository=${2:-$repo_root}
+  local base_commit=${3:-$s4_base}
+  local dry_steps expected_steps
+  dry_steps=$(workflow_job_steps "$file" daily-amaru-dry-run) || return 1
+  expected_steps=$(canonical_dry_run_steps) || return 1
+  [ "$dry_steps" = "$expected_steps" ] || return 1
+  [ "$(job_condition "$file" daily-amaru-dry-run)" = \
+    "github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.production)" ] || return 1
+  production_job_untouched "$file" "$repository" "$base_commit"
 }
 
 if [ ! -x "$fake_transport" ]; then
@@ -923,7 +960,7 @@ workflow_callers() {
 wiring_holds() {
   local callers
   callers=$(workflow_callers "$1")
-  grep -Fqx 'daily-amaru-dry-run|tests/test-daily-amaru.sh' <<<"$callers" || return 1
+  grep -Fqx 'daily-amaru-dry-run|nix' <<<"$callers" || return 1
   grep -Fqx 'daily-amaru-scheduled|scripts/daily-amaru.sh' <<<"$callers" || return 1
   return 0
 }
@@ -944,9 +981,9 @@ assert_workflow_literal_once 'continue-on-error: true'
   fail 'the scheduled runner does not provision nix for the bootstrap proposal'
 # Orphan each caller in turn, leaving the searched literal behind in a comment.
 reject_mutant wiring-pull-request.yaml "$workflow" \
-  "s|^        run: tests/test-daily-amaru.sh\$|        # run: tests/test-daily-amaru.sh\n        run: 'true'|" \
+  "s|^        run: nix develop --quiet -c just ci\$|        # run: nix develop --quiet -c just ci\n        run: 'true'|" \
   "        run: 'true'" 'an orphaned pull-request proof caller' wiring_holds
-grep -Fq 'tests/test-daily-amaru.sh' "$mutant_root/wiring-pull-request.yaml" ||
+grep -Fq 'nix develop --quiet -c just ci' "$mutant_root/wiring-pull-request.yaml" ||
   fail 'pull-request wiring mutant lost the misleading literal'
 reject_mutant wiring-scheduled.yaml "$workflow" \
   's|^          scripts/daily-amaru.sh$|          true # scripts/daily-amaru.sh|' \
@@ -1002,7 +1039,7 @@ reject_mutant pr-head-commented.yaml "$workflow" \
   's|^          ref: |          # ref: |' '          # ref: ' \
   'a commented-out candidate-head binding' pr_head_holds
 reject_mutant pr-head-caller-noop.yaml "$workflow" \
-  "s|^        run: tests/test-daily-amaru.sh\$|        # run: tests/test-daily-amaru.sh\n        run: 'true'|" \
+  "s|^        run: nix develop --quiet -c just ci\$|        # run: nix develop --quiet -c just ci\n        run: 'true'|" \
   "        run: 'true'" 'a no-op focused caller under a bound head' pr_head_holds
 printf 'PR-HEAD-WIRING explicit=1 focused_caller=1 mutants_rejected=3\n'
 pass pull-request-proof-runs-candidate-head
@@ -1564,7 +1601,7 @@ claim_operation_sets_match() {
 declare -A issue_223_mutant_invariant=()
 issue_223_declared_invariants=(
   INV-223-DISPATCH-ROUTING
-  INV-223-DRY-RUN-BYTE-UNCHANGED
+  INV-223-DRY-RUN-CANONICAL-ENTRY
   INV-223-ONE-LAUNCH-PER-DAY
   INV-223-PRELAUNCH-SUPERSEDE
   INV-223-MARKER-CENSUS-FAILS-CLOSED
@@ -1574,7 +1611,9 @@ issue_223_declared_invariants=(
 )
 issue_223_declared_mutants=(
   routing-string-input
-  dry-run-byte
+  dry-run-wrong-entry
+  dry-run-path-tampered
+  dry-run-step-key-added
   launch-cap-exit-open
   supersede-inverted
   census-open
@@ -1593,6 +1632,7 @@ issue_223_declared_mutants=(
   history-base-unavailable
 )
 issue_225_allowed_paths=(
+  .github/workflows/daily-amaru.yaml
   scripts/daily-amaru-github.sh
   tests/test-daily-amaru.sh
   tests/fixtures/daily-amaru/boundary-gh.sh
@@ -1889,7 +1929,7 @@ history_base_controls() {
   ! git -C "$positive" cat-file -e "$control_base^{commit}" 2>/dev/null || return 1
   ensure_history_commit "$positive" "$control_base" || return 1
   git -C "$positive" cat-file -e "$control_base^{commit}" 2>/dev/null || return 1
-  dry_run_steps_identical \
+  production_job_untouched \
     "$positive/.github/workflows/daily-amaru.yaml" "$positive" "$control_base" || return 1
   changed_output=$(git -C "$positive" diff --name-only "$control_base" --) || return 1
   mapfile -t control_paths < <(printf '%s' "$changed_output")
@@ -1929,14 +1969,8 @@ head_propagation_holds() {
 history_base_controls || fail 'history baseline controls did not hold'
 routing_holds "$workflow" || fail 'typed dispatch routing is not exact'
 routing_truth_table_holds "$workflow" || fail 'observed workflow conditions failed their truth table'
-dry_run_steps_identical "$workflow" || fail 'dry-run steps changed from the frozen base'
-base_workflow_snapshot=$tmp_root/pre-slice-workflow-for-hash.yaml
-git -C "$repo_root" show "$pre_slice_base:.github/workflows/daily-amaru.yaml" \
-  >"$base_workflow_snapshot" || fail 'history baseline workflow is unreadable'
-base_dry_hash=$(workflow_job_steps "$base_workflow_snapshot" daily-amaru-dry-run |
-  sha256sum | awk '{print $1}')
-current_dry_hash=$(workflow_job_steps "$workflow" daily-amaru-dry-run |
-  sha256sum | awk '{print $1}')
+canonical_dry_run_entry_holds "$workflow" ||
+  fail 'dry-run job does not run the canonical proof entry with the production job untouched'
 
 for routing_row in "${routing_census_rows[@]}"; do
   printf 'ROUTING %s\n' "$routing_row"
@@ -2061,11 +2095,25 @@ reject_223_mutant INV-223-DISPATCH-ROUTING routing-string-input \
   'github.event.inputs.production' \
   'the truthy string-form dispatch input' routing_truth_table_holds
 
-reject_223_mutant INV-223-DRY-RUN-BYTE-UNCHANGED dry-run-byte \
-  dry-run-byte.yaml "$workflow" \
-  's/Exercise the controller through the fake transport/Exercise changed dry-run body/' \
-  'Exercise changed dry-run body' \
-  'a changed dry-run step body' dry_run_steps_identical
+reject_223_mutant INV-223-DRY-RUN-CANONICAL-ENTRY dry-run-wrong-entry \
+  dry-run-wrong-entry.yaml "$workflow" \
+  's|nix develop --quiet -c just ci|tests/test-daily-amaru.sh|' \
+  'tests/test-daily-amaru.sh' \
+  'a dry-run job that bypasses the canonical entry' canonical_dry_run_entry_holds
+
+# shellcheck disable=SC2016
+reject_223_mutant INV-223-DRY-RUN-CANONICAL-ENTRY dry-run-path-tampered \
+  dry-run-path-tampered.yaml "$workflow" \
+  's/github\.event\.pull_request\.head\.sha/github.sha/' \
+  'github.sha' \
+  'a dry-run checkout redirected away from the candidate head' canonical_dry_run_entry_holds
+
+reject_223_mutant INV-223-DRY-RUN-CANONICAL-ENTRY dry-run-step-key-added \
+  dry-run-step-key-added.yaml "$workflow" \
+  '/^      - name: Run the canonical proof entry$/a\
+        if: github.event_name == '\''deployment'\''' \
+  "        if: github.event_name == 'deployment'" \
+  'an added key that makes the canonical entry conditional' canonical_dry_run_entry_holds
 
 reject_223_mutant INV-223-ONE-LAUNCH-PER-DAY launch-cap-exit-open \
   launch-cap-open.sh "$transport" \
@@ -2258,15 +2306,15 @@ launch_cap_mutants=0
 for mutant in "${registered_mutants[@]}"; do
   case "${issue_223_mutant_invariant[$mutant]}" in
     INV-223-DISPATCH-ROUTING) routing_mutants=$((routing_mutants + 1)) ;;
-    INV-223-DRY-RUN-BYTE-UNCHANGED) dry_run_mutants=$((dry_run_mutants + 1)) ;;
+    INV-223-DRY-RUN-CANONICAL-ENTRY) dry_run_mutants=$((dry_run_mutants + 1)) ;;
     INV-223-ONE-LAUNCH-PER-DAY) launch_cap_mutants=$((launch_cap_mutants + 1)) ;;
   esac
 done
 printf 'DISPATCH-ROUTING rows=%s production_jobs=%s controller_callers=%s mutants_rejected=%s\n' \
   "${#routing_census_rows[@]}" "$production_jobs" "$controller_callers" \
   "$routing_mutants"
-printf 'DRY-RUN-BYTE-IDENTITY base=%s current=%s mutants_rejected=%s\n' \
-  "$base_dry_hash" "$current_dry_hash" "$dry_run_mutants"
+printf 'DRY-RUN-ENTRY canonical=1 dev_shell=1 production_job_untouched=1 whole_block=1 mutants_rejected=%s\n' \
+  "$dry_run_mutants"
 printf 'LAUNCH-CAP trigger_pairs=%s launches_per_day=%s refusal=launch-consumed ordered_claim_effect_pairs=%s mutants_rejected=%s\n' \
   "${#trigger_pairs[@]}" "$launches_per_day" "$ordered_claim_effect_pairs" \
   "$launch_cap_mutants"
