@@ -2294,3 +2294,24 @@ pass issue-223-manual-production-cap
 # fixture owns its repositories under mktemp and never reads this checkout's
 # history.
 "$repo_root/tests/fixtures/daily-amaru/test-transport-boundary.sh" "$repo_root" all
+
+# INV-225-E1: the boundary proof must not change its verdict with the runner's
+# command inventory. Reproduce the CI runner shape by removing one member of
+# the production transport's scheduled census from an otherwise seeded host
+# PATH. The fixture itself must supply that member instead of inheriting it.
+boundary_host_bin="$tmp_root/boundary-host/bin"
+boundary_host_log="$tmp_root/boundary-host.log"
+seed_scheduled_path "$boundary_host_bin" without-rg
+for command in cat chmod cp cmp env find gpg ln mktemp mv od rm sort; do
+  target=$(command -v "$command")
+  ln -sf "$target" "$boundary_host_bin/$command"
+done
+if PATH="$boundary_host_bin" command -v rg >/dev/null 2>&1; then
+  fail 'boundary host PATH still resolves the omitted scheduled command: rg'
+fi
+if ! PATH="$boundary_host_bin" "$bash_binary" \
+  "$repo_root/tests/fixtures/daily-amaru/test-transport-boundary.sh" \
+  "$repo_root" pollution >"$boundary_host_log" 2>&1; then
+  cat "$boundary_host_log" >&2
+  fail 'boundary proof verdict depends on host PATH without rg'
+fi

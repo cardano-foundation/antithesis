@@ -12,6 +12,20 @@ fake_docker="$fixture_root/boundary-docker.sh"
 tmp_root=$(mktemp -d)
 trap 'rm -rf "$tmp_root"' EXIT
 
+seeded_commands=(
+  bash cat date dirname find git grep head jq mkdir mv sed seq sleep sort tail tr awk
+)
+standin_commands=(gh nix docker rg)
+scheduled_command_census=()
+
+declare -A boundary_seed_sources=()
+declare -A boundary_standin_sources=()
+boundary_sources_bound=0
+boundary_seeded_count=0
+boundary_standins_verified=0
+boundary_census_ablated=0
+boundary_path_mutants_rejected=0
+
 upstream_sha=1111111111111111111111111111111111111111
 old_sha=0000000000000000000000000000000000000000
 foreign_sha=2222222222222222222222222222222222222222
@@ -22,6 +36,111 @@ workflow_head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 fail() {
   printf 'FAIL: %s\n' "$*" >&2
   exit 1
+}
+
+write_rg_standin() {
+  local path=$1
+  cat >"$path" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+[ "$#" -eq 7 ] && [ "$1" = -l ] && [ "$4" = -g ] &&
+  [ "$5" = '*.yaml' ] && [ "$6" = -g ] && [ "$7" = '*.yml' ] || exit 64
+pattern=$2
+root=$3
+for file in "$root"/*.yaml "$root"/*.yml; do
+  [ -f "$file" ] || continue
+  grep -Eq "$pattern" "$file" && printf '%s\n' "$file"
+done
+EOF
+  chmod +x "$path"
+}
+
+bind_boundary_sources() {
+  local command source_dir target
+  [ "$boundary_sources_bound" -eq 0 ] || return 0
+
+  mapfile -t scheduled_command_census < <(awk '
+    /^scheduled_command_census=\($/ { inside = 1; next }
+    inside && /^\)$/ { exit }
+    inside { for (i = 1; i <= NF; i++) print $i }
+  ' "$transport")
+  [ "${#scheduled_command_census[@]}" -gt 0 ] ||
+    fail 'transport scheduled command census is empty'
+
+  for command in "${seeded_commands[@]}"; do
+    target=$(command -v "$command" 2>/dev/null || true)
+    [ "${target:0:1}" = / ] && [ -x "$target" ] ||
+      fail "cannot bind seeded command $command: ${target:-unresolved}"
+    boundary_seed_sources["$command"]=$target
+  done
+
+  source_dir="$tmp_root/boundary-standins"
+  mkdir -p "$source_dir"
+  ln -sf "$fake_gh" "$source_dir/gh"
+  ln -sf "$fake_nix" "$source_dir/nix"
+  ln -sf "$fake_docker" "$source_dir/docker"
+  write_rg_standin "$source_dir/rg"
+  for command in "${standin_commands[@]}"; do
+    target="$source_dir/$command"
+    [ "${target:0:1}" = / ] && [ -x "$target" ] ||
+      fail "cannot bind stand-in $command: $target"
+    boundary_standin_sources["$command"]=$target
+  done
+  boundary_sources_bound=1
+}
+
+seed_boundary_path() {
+  local bin_dir=$1 command target
+  bind_boundary_sources
+  for command in "${seeded_commands[@]}"; do
+    target=${boundary_seed_sources[$command]:-}
+    [ "${target:0:1}" = / ] && [ -x "$target" ] ||
+      fail "cannot bind seeded command $command: ${target:-unresolved}"
+    ln -sf "$target" "$bin_dir/$command"
+    boundary_seeded_count=$((boundary_seeded_count + 1))
+  done
+  for command in "${standin_commands[@]}"; do
+    target=${boundary_standin_sources[$command]:-}
+    [ "${target:0:1}" = / ] && [ -x "$target" ] ||
+      fail "cannot bind stand-in $command: ${target:-unresolved}"
+    ln -sf "$target" "$bin_dir/$command"
+    boundary_seeded_count=$((boundary_seeded_count + 1))
+  done
+}
+
+assert_boundary_path() {
+  local expected_bin=$1 command expected resolved target
+  [ "${expected_bin:0:1}" = / ] ||
+    fail "boundary bin root is not absolute: $expected_bin"
+  [ "$PATH" = "$expected_bin" ] ||
+    fail "boundary PATH inherited host entries: $PATH"
+  for command in "${seeded_commands[@]}"; do
+    expected="$expected_bin/$command"
+    resolved=$(command -v "$command" 2>/dev/null || true)
+    target=${boundary_seed_sources[$command]:-}
+    [ "$resolved" = "$expected" ] && [ -x "$resolved" ] &&
+      [ -n "$target" ] && [ "$resolved" -ef "$target" ] ||
+      fail "seeded command $command is not bound to its proved source: ${resolved:-unresolved}"
+  done
+  for command in "${standin_commands[@]}"; do
+    expected="$expected_bin/$command"
+    resolved=$(command -v "$command" 2>/dev/null || true)
+    target=${boundary_standin_sources[$command]:-}
+    [ "$resolved" = "$expected" ] && [ -x "$resolved" ] &&
+      [ -n "$target" ] && [ "$resolved" -ef "$target" ] ||
+      fail "stand-in $command is not bound to its fixture binary: ${resolved:-unresolved}"
+    boundary_standins_verified=$((boundary_standins_verified + 1))
+  done
+}
+
+run_boundary_command() {
+  local expected_bin=$1
+  shift
+  local PATH=$expected_bin
+  export PATH
+  hash -r
+  assert_boundary_path "$expected_bin"
+  "$@"
 }
 
 write_lock() {
@@ -112,27 +231,25 @@ prepare_case() {
   mkdir -p "$state" "$bin"
   : >"$effects"
   : >"$comments"
-  ln -s "$fake_gh" "$bin/gh"
-  ln -s "$fake_nix" "$bin/nix"
-  ln -s "$fake_docker" "$bin/docker"
+  seed_boundary_path "$bin"
 }
 
 run_transport() {
   local label=$1 remote=$2
   prepare_case "$label"
   transport_rc=0
-  env \
-    PATH="$bin:$PATH" \
-    DAILY_AMARU_DAY="$day" \
+  DAILY_AMARU_DAY="$day" \
     DAILY_AMARU_IDENTITY=boundary-bootstrap-token \
     GH_TOKEN=boundary-repository-token \
+    GIT_CONFIG_NOSYSTEM=1 \
+    GIT_CONFIG_GLOBAL=/dev/null \
     DAILY_AMARU_STATE_DIR="$state" \
     DAILY_AMARU_RECEIPT="$receipt" \
     DAILY_AMARU_BOUNDARY_GH_LOG="$effects" \
     DAILY_AMARU_BOUNDARY_COMMENTS="$comments" \
     DAILY_AMARU_BOUNDARY_BOOTSTRAP_REMOTE="$remote" \
     DAILY_AMARU_BOUNDARY_REPOSITORY_REMOTE="$remote" \
-    "$transport" propose-bootstrap "$upstream_sha" \
+    run_boundary_command "$bin" "$transport" propose-bootstrap "$upstream_sha" \
     >"$stdout" 2>"$stderr" || transport_rc=$?
 }
 
@@ -182,17 +299,17 @@ assert_fresh() {
   grep -Fq 'gh pr create' "$effects" || fail 'fresh proposal did not create its PR'
 }
 
-assert_pollution_closed() {
-  local bootstrap_remote upstream_remote final_error candidate
-  bootstrap_remote=$(create_remote bootstrap)
-  upstream_remote=$(create_remote upstream)
-  prepare_case pollution
+assert_pollution_with_remotes() {
+  local label=$1 bootstrap_remote=$2 upstream_remote=$3
+  local record_census_ablation=${4:-false}
+  local final_error='' candidate='' key value
+  prepare_case "$label"
   controller_rc=0
-  env \
-    PATH="$bin:$PATH" \
-    GIT_CONFIG_COUNT=1 \
+  GIT_CONFIG_COUNT=1 \
     GIT_CONFIG_KEY_0="url.file://$upstream_remote.insteadOf" \
     GIT_CONFIG_VALUE_0=https://github.com/pragma-org/amaru.git \
+    GIT_CONFIG_NOSYSTEM=1 \
+    GIT_CONFIG_GLOBAL=/dev/null \
     DAILY_AMARU_MODE=production \
     DAILY_AMARU_DAY="$day" \
     DAILY_AMARU_HEAD="$workflow_head" \
@@ -205,9 +322,15 @@ assert_pollution_closed() {
     DAILY_AMARU_BOUNDARY_BOOTSTRAP_REMOTE="$bootstrap_remote" \
     DAILY_AMARU_BOUNDARY_REPOSITORY_REMOTE="$bootstrap_remote" \
     DAILY_AMARU_TRANSPORT="$transport" \
-    "$controller" >"$stdout" 2>"$stderr" || controller_rc=$?
-  final_error=$(sed -n 's/^error=//p' "$receipt" | tail -1)
-  candidate=$(sed -n 's/^bootstrap_candidate_sha=//p' "$receipt" | tail -1)
+    run_boundary_command "$bin" "$controller" >"$stdout" 2>"$stderr" || controller_rc=$?
+  [ -f "$receipt" ] ||
+    fail "fixed controller wrote no receipt: $(tr '\n' ' ' <"$stderr")"
+  while IFS='=' read -r key value; do
+    case "$key" in
+      error) final_error=$value ;;
+      bootstrap_candidate_sha) candidate=$value ;;
+    esac
+  done <"$receipt"
   if [ "$final_error" = malformed-candidate-sha ]; then
     grep -Fq 'bootstrap-proposal: malformed-candidate-sha' "$stderr" ||
       fail 'pollution reached the wrong malformed-candidate fingerprint'
@@ -215,6 +338,81 @@ assert_pollution_closed() {
   fi
   [[ "$candidate" =~ ^[0-9a-f]{40}$ ]] ||
     fail "fixed controller recorded no bootstrap candidate (error=$final_error rc=$controller_rc)"
+  boundary_pollution_verdict="$final_error|valid-candidate"
+  if [ "$record_census_ablation" = true ]; then
+    boundary_census_ablated=$((boundary_census_ablated + 1))
+  fi
+}
+
+assert_pollution_closed() {
+  local label=${1:-pollution} bootstrap_remote upstream_remote
+  bootstrap_remote=$(create_remote "$label-bootstrap")
+  upstream_remote=$(create_remote "$label-upstream")
+  assert_pollution_with_remotes "$label" "$bootstrap_remote" "$upstream_remote"
+}
+
+assert_boundary_census_ablation() {
+  local control=$boundary_pollution_verdict omit label host_bin command target
+  local bootstrap_remote upstream_remote
+  local -a support_commands=(bash ln mkdir mktemp)
+
+  for omit in "${scheduled_command_census[@]}"; do
+    label="boundary-ablate-$omit"
+    bootstrap_remote=$(create_remote "$label-bootstrap")
+    upstream_remote=$(create_remote "$label-upstream")
+    host_bin="$tmp_root/$label-host-bin"
+    mkdir -p "$host_bin"
+    for command in "${support_commands[@]}" "${scheduled_command_census[@]}"; do
+      [ "$command" = "$omit" ] && continue
+      target=${boundary_seed_sources[$command]:-${boundary_standin_sources[$command]:-}}
+      [ -n "$target" ] || target=$(command -v "$command" 2>/dev/null || true)
+      [ -n "$target" ] && [ -x "$target" ] || continue
+      ln -sf "$target" "$host_bin/$command"
+    done
+    if PATH="$host_bin" command -v "$omit" >/dev/null 2>&1; then
+      fail "boundary census ablation still resolves omitted command: $omit"
+    fi
+    PATH="$host_bin" command -v bash >/dev/null 2>&1 ||
+      fail "boundary census ablation host PATH cannot resolve its positive control: bash"
+    PATH="$host_bin" assert_pollution_with_remotes \
+      "$label" "$bootstrap_remote" "$upstream_remote" true
+    [ "$boundary_pollution_verdict" = "$control" ] ||
+      fail "boundary proof verdict changed without host command $omit: $boundary_pollution_verdict"
+  done
+}
+
+assert_boundary_census_complete() {
+  [ "$boundary_census_ablated" -eq "${#scheduled_command_census[@]}" ] ||
+    fail "boundary census ablation completed $boundary_census_ablated re-runs, expected ${#scheduled_command_census[@]}"
+}
+
+assert_boundary_census_derivation() {
+  local mutant="$tmp_root/boundary-census-ablation-removed.sh"
+  local log="$tmp_root/boundary-census-ablation-removed.log" before after
+  local ablation_call line_continuation="\\"
+  printf -v ablation_call '    PATH="$%s" assert_pollution_with_remotes %s' \
+    host_bin "$line_continuation"
+  before=$(grep -Fxc "$ablation_call" "$0")
+  [ "$before" -eq 1 ] ||
+    fail "census-ablation-removal mutant expected one re-run call, found $before"
+  awk -v needle="$ablation_call" '
+    $0 == needle {
+      print "    : # MUTANT: census ablation re-run removed"
+      getline
+      next
+    }
+    { print }
+  ' "$0" >"$mutant"
+  chmod +x "$mutant"
+  after=$(grep -c '^    : # MUTANT: census ablation re-run removed$' "$mutant")
+  [ "$after" -eq 1 ] &&
+    [ "$(grep -Fxc "$ablation_call" "$mutant" || true)" -eq 0 ] ||
+    fail 'census-ablation-removal mutation did not apply'
+  if "$mutant" "$repo_root" ablation >"$log" 2>&1; then
+    fail 'census-ablation-removal mutant passed'
+  fi
+  grep -Fq 'boundary census ablation completed 0 re-runs' "$log" ||
+    fail "census-ablation-removal mutant failed for the wrong reason: $(tr '\n' ' ' <"$log")"
 }
 
 declare -A executed_value_operations=()
@@ -287,7 +485,8 @@ execute_value_operation() {
     *) fail "unknown value operation: $operation" ;;
   esac
 
-  env PATH="$bin:$PATH" GIT_TRACE=1 DAILY_AMARU_DAY="$day" \
+  GIT_TRACE=1 DAILY_AMARU_DAY="$day" GIT_CONFIG_NOSYSTEM=1 \
+    GIT_CONFIG_GLOBAL=/dev/null \
     DAILY_AMARU_IDENTITY=boundary-bootstrap-token GH_TOKEN=boundary-repository-token \
     DAILY_AMARU_STATE_DIR="$state" DAILY_AMARU_BOUNDARY_GH_LOG="$effects" \
     DAILY_AMARU_BOUNDARY_COMMENTS="$comments" \
@@ -295,7 +494,8 @@ execute_value_operation() {
     DAILY_AMARU_BOUNDARY_REPOSITORY_REMOTE="$consumer_remote" \
     DAILY_AMARU_BOUNDARY_HEAD_SHA="$workflow_head" \
     DAILY_AMARU_BOUNDARY_INTEGRATED_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
-    "$transport" "$operation" "${arguments[@]}" >"$stdout" 2>"$stderr" || rc=$?
+    run_boundary_command "$bin" "$transport" "$operation" "${arguments[@]}" \
+    >"$stdout" 2>"$stderr" || rc=$?
   [ "$rc" -eq 0 ] || fail "value operation $operation failed: $(tr '\n' ' ' <"$stderr")"
   case "$operation" in
     propose-bootstrap) expected=$(git --git-dir="$bootstrap_remote" rev-parse "refs/heads/$branch") ;;
@@ -404,6 +604,100 @@ assert_value_mutants() {
   done
 }
 
+assert_boundary_path_mutants() {
+  local original_path=$PATH log
+  boundary_path_mutants_rejected=0
+  prepare_case boundary-path-mutants
+
+  log="$case_root/host-inheritance.log"
+  if (PATH="$bin:$original_path" assert_boundary_path "$bin") >"$log" 2>&1; then
+    fail 'host-inheritance mutant passed'
+  fi
+  grep -Fq 'boundary PATH inherited host entries' "$log" ||
+    fail "host-inheritance mutant failed for the wrong reason: $(tr '\n' ' ' <"$log")"
+  boundary_path_mutants_rejected=$((boundary_path_mutants_rejected + 1))
+
+  rm -f "$bin/gh"
+  ln -s "$case_root/missing-gh" "$bin/gh"
+  [ -L "$bin/gh" ] && [ ! -e "$bin/gh" ] ||
+    fail 'dangling stand-in mutation did not apply'
+  log="$case_root/standin-resolution.log"
+  if (PATH="$bin" assert_boundary_path "$bin") >"$log" 2>&1; then
+    fail 'stand-in-resolution mutant passed'
+  fi
+  grep -Fq 'stand-in gh is not bound to its fixture binary' "$log" ||
+    fail "stand-in-resolution mutant failed for the wrong reason: $(tr '\n' ' ' <"$log")"
+  boundary_path_mutants_rejected=$((boundary_path_mutants_rejected + 1))
+
+  ln -sf "${boundary_standin_sources[gh]}" "$bin/gh"
+  rm -f "$bin/jq"
+  printf '#!/bin/sh\nexit 0\n' >"$bin/jq"
+  chmod +x "$bin/jq"
+  grep -Fqx 'exit 0' "$bin/jq" || fail 'fabricated seed mutation did not apply'
+  log="$case_root/fabricated-seed.log"
+  if (PATH="$bin" assert_boundary_path "$bin") >"$log" 2>&1; then
+    fail 'fabricated-seed mutant passed'
+  fi
+  grep -Fq 'seeded command jq is not bound to its proved source' "$log" ||
+    fail "fabricated-seed mutant failed for the wrong reason: $(tr '\n' ' ' <"$log")"
+  boundary_path_mutants_rejected=$((boundary_path_mutants_rejected + 1))
+
+  ln -sf "${boundary_seed_sources[jq]}" "$bin/jq"
+  mkdir -p "$case_root/missing-source-bin"
+  log="$case_root/missing-seed-source.log"
+  if (
+    boundary_seed_sources[jq]="$case_root/missing-jq"
+    seed_boundary_path "$case_root/missing-source-bin"
+  ) >"$log" 2>&1; then
+    fail 'missing-seed-source mutant passed'
+  fi
+  grep -Fq 'cannot bind seeded command jq:' "$log" ||
+    fail "missing-seed-source mutant failed for the wrong reason: $(tr '\n' ' ' <"$log")"
+  boundary_path_mutants_rejected=$((boundary_path_mutants_rejected + 1))
+
+  log="$case_root/relative-root.log"
+  if (cd "$case_root" && PATH=bin assert_boundary_path bin) >"$log" 2>&1; then
+    fail 'relative-bin-root mutant passed'
+  fi
+  grep -Fq 'boundary bin root is not absolute: bin' "$log" ||
+    fail "relative-bin-root mutant failed for the wrong reason: $(tr '\n' ' ' <"$log")"
+  boundary_path_mutants_rejected=$((boundary_path_mutants_rejected + 1))
+}
+
+print_boundary_path_marker() {
+  [ "$boundary_seeded_count" -gt 0 ] ||
+    fail 'boundary path seeded no proved commands'
+  [ "$boundary_standins_verified" -gt 0 ] ||
+    fail 'boundary operation path verified no stand-ins'
+  printf 'BOUNDARY-PATH hermetic=1 seeded=%s host_inherited=0 standins_verified=%s census_ablated=%s mutants_rejected=%s\n' \
+    "$boundary_seeded_count" "$boundary_standins_verified" \
+    "$boundary_census_ablated" "$boundary_path_mutants_rejected"
+}
+
+assert_boundary_marker_derivation() {
+  local mutant="$tmp_root/boundary-verification-removed.sh"
+  local log="$tmp_root/boundary-verification-removed.log" before after
+  local assertion_line
+  printf -v assertion_line '  assert_boundary_path "$%s"' expected_bin
+  before=$(grep -Fxc "$assertion_line" "$0")
+  [ "$before" -eq 1 ] ||
+    fail "verification-removal mutant expected one operation-path assertion, found $before"
+  awk -v needle="$assertion_line" '
+    $0 == needle { print "  : # MUTANT: operation-path verification removed"; next }
+    { print }
+  ' "$0" >"$mutant"
+  chmod +x "$mutant"
+  after=$(grep -c '^  : # MUTANT: operation-path verification removed$' "$mutant")
+  [ "$after" -eq 1 ] &&
+    [ "$(grep -Fxc "$assertion_line" "$mutant" || true)" -eq 0 ] ||
+    fail 'verification-removal mutation did not apply'
+  if "$mutant" "$repo_root" marker >"$log" 2>&1; then
+    fail 'verification-removal mutant passed'
+  fi
+  grep -Fq 'boundary operation path verified no stand-ins' "$log" ||
+    fail "verification-removal mutant failed for the wrong reason: $(tr '\n' ' ' <"$log")"
+}
+
 reject_scenario_mutant() {
   local label=$1 script=$2 mutant_scenario=$3 fingerprint=$4
   local log="$tmp_root/$label.log"
@@ -484,10 +778,27 @@ case "$scenario" in
     assert_value_mutants
     assert_receipt_schema
     assert_mutants
+    assert_boundary_census_ablation
+    assert_boundary_census_complete
+    assert_boundary_path_mutants
+    assert_boundary_marker_derivation
+    assert_boundary_census_derivation
     printf 'VALUE-CHANNEL operations=%s executed=%s census=complete mutants_rejected=%s\n' \
       "$value_operation_count" "$value_executed_count" "$value_mutants_rejected"
     printf 'VALUE-CHANNEL-FIRED reproduced=malformed-candidate-sha real_git=1 real_transport=1\n'
     printf 'PROPOSAL-REATTEMPT adopt=1 foreign=1 fresh=1 mutants_rejected=4\n'
+    print_boundary_path_marker
+    printf 'BOUNDARY-PATH-DERIVED verification_removed=rejected seed_fabricated=rejected relative_root=rejected census_ablation_removed=rejected\n'
+    ;;
+  ablation)
+    assert_pollution_closed ablation-control
+    assert_boundary_census_ablation
+    assert_boundary_census_complete
+    ;;
+  marker)
+    prepare_case marker
+    run_boundary_command "$bin" "$bin/bash" -c :
+    print_boundary_path_marker
     ;;
   *) fail "unknown scenario: $scenario" ;;
 esac

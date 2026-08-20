@@ -28,3 +28,24 @@ Bisect-safe as one unit (`plan.md`, "Ordered work").
 - [x] T225-09 Re-base the daily-loop scope fence to this slice's pre-slice base
       and allow-list, keeping the `scope-path-outside-fence` mutant rejected and
       `dry_run_steps_identical` green (INV-225-D1).
+
+Slice `S2` — hermetic boundary proof (forward correction on pushed `7c56594`).
+
+- [x] T225-10 Seed every command the boundary proof's operations need and stop
+      inheriting the host PATH; the proof's verdict is unchanged under a PATH
+      containing only what it seeds (INV-225-E1).
+- [x] T225-11 Assert, before any operation runs, that each stand-in resolves
+      inside the fixture's own bin, with the assertion shown able to fail
+      (INV-225-E2, ratifies CAND-225-3).
+- [x] T225-12 Bind every seeded command to a proved-existing binary; die naming
+      the command otherwise; ablate all 15 census members and require an
+      unchanged verdict (INV-225-E1 v2).
+- [x] T225-13 Reject all three substitution modes — dangling symlink, relative
+      bin root, fabricated no-op — each with its own mutant (INV-225-E2 v2).
+- [x] T225-14 Derive every `BOUNDARY-PATH` count from the executed path, proved
+      by a mutant that deletes the verification and reds the run (INV-225-E3).
+
+Slice `S3` — the ablation count must be the ablation.
+
+- [x] T225-15 Derive `census_ablated` from the ablation re-run itself, and prove
+      it with a mutant that deletes the re-run and reds the run (INV-225-E3).

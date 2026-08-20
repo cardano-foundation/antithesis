@@ -101,3 +101,81 @@ every path permitted to differ from `pre_slice_base=cd8144b`. It was frozen for
 Re-basing the fence per slice is in scope for this campaign. Growing the
 allow-list against an ever-older base is not: it would make the fence weaker
 every ticket. Identifier naming is the commit owner's choice.
+
+## Slice S2 — the boundary proof must be hermetic
+
+`7c56594` was green under the local ticket gate and red in CI:
+`FAIL: fixed controller recorded no bootstrap candidate (error=missing-command-rg rc=1)`
+(run 32271362864). Reproduced locally by hiding `rg` from the fixture's PATH.
+
+`prepare_case` builds `PATH="$bin:$PATH"`, so the boundary proof inherits host
+binaries. The nix dev shell has ripgrep; the GitHub runner does not. The `just ci`
+leg of the gate runs in the dev shell and therefore cannot observe this class at
+all — the gate was green by construction, not by evidence.
+
+This is the same root the submission-2 auditor proposed as CAND-225-3: the
+fixture's PATH construction decides which binaries are actually invoked, and
+nothing asserts the answer.
+
+| ID | Invariant | Fails when | Holds when |
+|---|---|---|---|
+| INV-225-E1 | The boundary proof's verdict does not depend on any host-provided binary | removing a member of the transport's `scheduled_command_census` from the host PATH changes the proof's outcome | the fixture seeds every command the proof's operations need and inherits nothing; the proof produces the same verdict under a PATH containing only what it seeds |
+| INV-225-E2 | The stand-ins are the binaries actually invoked (ratifies CAND-225-3) | a dangling symlink, a relative root, or an unseeded name silently reaches a real `gh`, `nix` or `docker` | before any operation runs, the proof asserts that `command -v` for each stand-in resolves inside its own bin, and this assertion is shown able to fail |
+
+INV-225-E2 is the load-bearing half. E1 without E2 is a promise; E2 makes the
+proof state, per run, which binaries it actually used.
+
+### S2 mandate v2 — sharpened after submission 1's findings
+
+Submission 1 (`3184b07`) fixed `rg` and left the class open. The audit
+(`55881e6c…`) showed the fixture resolves each seeded command against the
+inherited host PATH and, when one is absent, **fabricates** `#!/bin/sh\nexit 0`.
+Nine of the fifteen `scheduled_command_census` members still changed the
+proof's verdict when ablated, and the `jq` case produced
+`error=proposal-failed` — an infrastructure failure reported as a domain
+verdict, which is strictly worse than the `missing-command-rg` it replaced.
+
+E1 and E2 keep their meaning. These clauses make the failure modes explicit and
+add the evidence contract the third finding exposed.
+
+| ID | Invariant | Fails when | Holds when |
+|---|---|---|---|
+| INV-225-E1 (v2) | Every seeded command is bound to a binary the proof **proved exists**, and the proof dies naming the command when it cannot | "seeded" means only that an entry exists in the bin; an absent command is silently replaced by a success-returning stand-in; ablating any member of the transport's `scheduled_command_census` changes the verdict | ablating **each** of the 15 census members in turn leaves the verdict identical to the unablated control, and a command that cannot be bound is a named, loud death |
+| INV-225-E2 (v2) | The stand-ins are the binaries actually invoked, against **all three** named substitution modes | any of — a dangling symlink, a **relative** bin root, or a fabricated no-op substitute — is accepted; or any of the three has no mutant | each of the three modes is rejected, and each rejection is demonstrated by its own mutant |
+| INV-225-E3 (ratifies CAND-225-5) | Every count in a proof marker is produced by the executed path it summarizes | a field is a constant, or a length of a declared list; deleting the code path the field reports leaves the marker byte-identical | deleting the reported path changes the number or reds the run, shown by a mutant that verifies its own edit applied |
+
+INV-225-E3 is general, not local to this fixture: gate v3's own comment already
+states the rule for `VALUE-CHANNEL` and the leg immediately below it did not
+enforce it. That gap was the ticket owner's, and gate v4 closes it.
+
+`tests/test-daily-amaru.sh`'s `seed_scheduled_path` carries the same
+`stub_command` fallback. It is **out of scope here** — no assertion was shown to
+mis-verdict because of it — and is routed to the epic owner with INV-225-E1's
+property class attached.
+
+## Slice S3 — the ablation count must be the ablation
+
+The S2 owner campaign closed at submission 2/2. E1 v2 and E2 v2 are closed:
+`stub_command` is gone from the fixture, an unbindable seeded command now dies
+naming itself instead of mis-verdicting as `proposal-failed`, and all three
+substitution modes are rejected with their own mutants.
+
+One row stayed open. `census_ablated=` is the **loop trip count**, not the
+ablation re-run. Deleting the only re-run call leaves `census_ablated=15`
+unchanged while `seeded=` drops 792→462 and `standins_verified=` drops 136→76 —
+proving those two are derived and this one is not. Gate v4's
+`census_ablated>=15` leg is therefore satisfied by a run that never re-checked
+a verdict under an ablated host PATH.
+
+This is INV-225-E3's own class, recurring inside the field that was added to
+close INV-225-E1 v2. That recurrence is the point: the rule was stated, enforced
+in one place, and re-broken in the next field written. It closes mechanically or
+it keeps coming back.
+
+| ID | Invariant | Fails when | Holds when |
+|---|---|---|---|
+| INV-225-E3 (scope unchanged, now enforced on `census_ablated`) | Every count in a proof marker is produced by the executed path it summarizes | deleting the ablation re-run leaves `census_ablated` unchanged and the run green | deleting the ablation re-run either moves `census_ablated` or reds the run, proved by a mutant that verifies its own edit applied |
+
+The intact code does perform the 15 re-runs — the 792→462 drop is the evidence.
+This slice does not add coverage; it makes the marker require the coverage that
+already happens, so a later edit cannot quietly remove it.
