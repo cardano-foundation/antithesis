@@ -33,9 +33,24 @@ guard_sites=0
 upstream_sha=1111111111111111111111111111111111111111
 old_sha=0000000000000000000000000000000000000000
 foreign_sha=2222222222222222222222222222222222222222
+old_configs_sha=3333333333333333333333333333333333333333
+selected_configs_sha=4444444444444444444444444444444444444444
+foreign_configs_sha=5555555555555555555555555555555555555555
 day=2026-08-19
 branch="daily-amaru/bootstrap-$day-${upstream_sha:0:12}"
 workflow_head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+atomic_paths=$'flake.lock\nnix/peer-snapshots/resolution.json'
+resolver_invocations=0
+amaru_overrides=0
+configs_overrides=0
+changed_paths=0
+proposal_commits=0
+lock_only_mutants=0
+resolver_failures=0
+named_receipts=0
+pushes_after_failure=0
+prs_after_failure=0
+launches=0
 
 fail() {
   printf 'FAIL: %s\n' "$*" >&2
@@ -149,19 +164,41 @@ run_boundary_command() {
 
 write_lock() {
   local path=$1 sha=$2
+  local configs_sha=${3:-$old_configs_sha}
   mkdir -p "$(dirname "$path")"
   printf '%s\n' \
     '{' \
     '  "nodes": {' \
-    '    "root": {"inputs": {"amaru": "stock"}},' \
-    '    "stock": {' \
+    '    "root": {"inputs": {"amaru": "amaru", "cardano-configurations": "cardano-configurations"}},' \
+    '    "amaru": {' \
     '      "original": {"owner": "pragma-org", "repo": "amaru"},' \
     "      \"locked\": {\"rev\": \"$sha\", \"narHash\": \"sha256-old\", \"lastModified\": 1}" \
+    '    },' \
+    '    "cardano-configurations": {' \
+    '      "original": {"owner": "cardano-foundation", "repo": "cardano-configurations"},' \
+    "      \"locked\": {\"rev\": \"$configs_sha\", \"narHash\": \"sha256-old-configs\", \"lastModified\": 1}" \
     '    }' \
     '  },' \
     '  "root": "root",' \
     '  "version": 7' \
     '}' >"$path"
+}
+
+write_resolution() {
+  local path=$1 amaru_rev=$2 configs_rev=$3
+  mkdir -p "$(dirname "$path")"
+  jq -n --arg amaru_rev "$amaru_rev" --arg configs_rev "$configs_rev" '{
+    amaru_rev: $amaru_rev,
+    amaru_committer_date_utc: "2026-01-01T00:00:00Z",
+    configs_rev: $configs_rev,
+    resolved_at_utc: "2026-01-01T00:00:00Z",
+    query_url: "https://example.invalid/commits",
+    snapshots: {
+      mainnet: {sha256: "aa"},
+      preprod: {sha256: "bb"},
+      preview: {sha256: "cc"}
+    }
+  }' >"$path"
 }
 
 create_remote() {
@@ -171,7 +208,12 @@ create_remote() {
   git init --quiet --initial-branch=main "$seed"
   git -C "$seed" config user.name boundary
   git -C "$seed" config user.email boundary@example.invalid
-  write_lock "$seed/flake.lock" "$old_sha"
+  write_lock "$seed/flake.lock" "$old_sha" "$old_configs_sha"
+  write_resolution "$seed/nix/peer-snapshots/resolution.json" \
+    "$old_sha" "$old_configs_sha"
+  mkdir -p "$seed/scripts"
+  cp "$fixture_root/boundary-resolver.sh" "$seed/scripts/resolve-peer-snapshots"
+  chmod +x "$seed/scripts/resolve-peer-snapshots"
   printf 'boundary\n' >"$seed/README.md"
   git -C "$seed" add .
   git -C "$seed" commit --quiet -m base
@@ -206,7 +248,7 @@ seed_proposal() {
   git -C "$work" config user.email boundary@example.invalid
   git -C "$work" checkout --quiet -b "$branch" origin/main
   case "$kind" in
-    adopt)
+    adopt | lock-only)
       (cd "$work" && "$fake_nix" flake lock --override-input amaru \
         "github:pragma-org/amaru/$upstream_sha")
       ;;
@@ -214,11 +256,84 @@ seed_proposal() {
       (cd "$work" && "$fake_nix" flake lock --override-input amaru \
         "github:pragma-org/amaru/$foreign_sha")
       ;;
+    atomic)
+      (cd "$work" && "$fake_nix" flake lock --override-input amaru \
+        "github:pragma-org/amaru/$upstream_sha")
+      (cd "$work" && "$fake_nix" flake lock --override-input \
+        cardano-configurations \
+        "github:cardano-foundation/cardano-configurations/$selected_configs_sha")
+      write_resolution "$work/nix/peer-snapshots/resolution.json" \
+        "$upstream_sha" "$selected_configs_sha"
+      ;;
+    record-only)
+      write_resolution "$work/nix/peer-snapshots/resolution.json" \
+        "$upstream_sha" "$selected_configs_sha"
+      ;;
+    extra-path)
+      (cd "$work" && "$fake_nix" flake lock --override-input amaru \
+        "github:pragma-org/amaru/$upstream_sha")
+      (cd "$work" && "$fake_nix" flake lock --override-input \
+        cardano-configurations \
+        "github:cardano-foundation/cardano-configurations/$selected_configs_sha")
+      write_resolution "$work/nix/peer-snapshots/resolution.json" \
+        "$upstream_sha" "$selected_configs_sha"
+      printf 'extra\n' >>"$work/README.md"
+      ;;
+    split)
+      (cd "$work" && "$fake_nix" flake lock --override-input amaru \
+        "github:pragma-org/amaru/$upstream_sha")
+      git -C "$work" add flake.lock
+      git -C "$work" commit --quiet -m 'split lock'
+      (cd "$work" && "$fake_nix" flake lock --override-input \
+        cardano-configurations \
+        "github:cardano-foundation/cardano-configurations/$selected_configs_sha")
+      write_resolution "$work/nix/peer-snapshots/resolution.json" \
+        "$upstream_sha" "$selected_configs_sha"
+      ;;
     *) fail "unknown seed kind: $kind" ;;
   esac
   git -C "$work" add .
   git -C "$work" commit --quiet -m "$kind proposal"
   git -C "$work" push --quiet origin "HEAD:refs/heads/$branch"
+  git --git-dir="$remote" rev-parse "refs/heads/$branch"
+}
+
+seed_inconsistent_atomic() {
+  local remote=$1 field=$2
+  local work
+  seed_proposal "$remote" atomic >/dev/null
+  work=$(mktemp -d "$tmp_root/inconsistent-$field.XXXXXX")
+  git clone --quiet "file://$remote" "$work"
+  git -C "$work" config user.name boundary
+  git -C "$work" config user.email boundary@example.invalid
+  git -C "$work" checkout --quiet "$branch"
+  case "$field" in
+    lock-amaru)
+      jq --arg sha "$foreign_sha" \
+        '.nodes.amaru.locked.rev = $sha' "$work/flake.lock" >"$work/flake.lock.new"
+      mv "$work/flake.lock.new" "$work/flake.lock"
+      ;;
+    lock-configs)
+      jq --arg sha "$foreign_configs_sha" \
+        '.nodes["cardano-configurations"].locked.rev = $sha' \
+        "$work/flake.lock" >"$work/flake.lock.new"
+      mv "$work/flake.lock.new" "$work/flake.lock"
+      ;;
+    record-amaru)
+      jq --arg sha "$foreign_sha" '.amaru_rev = $sha' \
+        "$work/nix/peer-snapshots/resolution.json" >"$work/resolution.new"
+      mv "$work/resolution.new" "$work/nix/peer-snapshots/resolution.json"
+      ;;
+    record-configs)
+      jq --arg sha "$foreign_configs_sha" '.configs_rev = $sha' \
+        "$work/nix/peer-snapshots/resolution.json" >"$work/resolution.new"
+      mv "$work/resolution.new" "$work/nix/peer-snapshots/resolution.json"
+      ;;
+    *) fail "unknown inconsistent field: $field" ;;
+  esac
+  git -C "$work" add -- flake.lock nix/peer-snapshots/resolution.json
+  git -C "$work" commit --quiet --amend --no-edit
+  git -C "$work" push --quiet --force origin "HEAD:refs/heads/$branch"
   git --git-dir="$remote" rev-parse "refs/heads/$branch"
 }
 
@@ -232,15 +347,24 @@ prepare_case() {
   stdout="$case_root/stdout"
   stderr="$case_root/stderr"
   receipt="$case_root/receipt"
+  resolver_log="$case_root/resolver.log"
+  nix_log="$case_root/nix.log"
   mkdir -p "$state" "$bin"
   : >"$effects"
   : >"$comments"
+  : >"$resolver_log"
+  : >"$nix_log"
+  unset DAILY_AMARU_BOUNDARY_RESOLVER_FAIL
   seed_boundary_path "$bin"
 }
 
 run_transport() {
   local label=$1 remote=$2
+  local fail_mode=${3:-}
   prepare_case "$label"
+  if [ -n "$fail_mode" ]; then
+    export DAILY_AMARU_BOUNDARY_RESOLVER_FAIL=$fail_mode
+  fi
   transport_rc=0
   DAILY_AMARU_DAY="$day" \
     DAILY_AMARU_IDENTITY=boundary-bootstrap-token \
@@ -253,14 +377,18 @@ run_transport() {
     DAILY_AMARU_BOUNDARY_COMMENTS="$comments" \
     DAILY_AMARU_BOUNDARY_BOOTSTRAP_REMOTE="$remote" \
     DAILY_AMARU_BOUNDARY_REPOSITORY_REMOTE="$remote" \
+    DAILY_AMARU_BOUNDARY_RESOLVER_LOG="$resolver_log" \
+    DAILY_AMARU_BOUNDARY_NIX_LOG="$nix_log" \
+    DAILY_AMARU_BOUNDARY_SELECTED_CONFIGS_REV="$selected_configs_sha" \
     run_boundary_command "$bin" "$transport" propose-bootstrap "$upstream_sha" \
     >"$stdout" 2>"$stderr" || transport_rc=$?
+  unset DAILY_AMARU_BOUNDARY_RESOLVER_FAIL
 }
 
 assert_adopt() {
   local remote before after output
   remote=$(create_remote adopt)
-  before=$(seed_proposal "$remote" adopt)
+  before=$(seed_proposal "$remote" atomic)
   run_transport adopt "$remote"
   output=$(cat "$stdout")
   after=$(git --git-dir="$remote" rev-parse "refs/heads/$branch")
@@ -298,8 +426,8 @@ assert_fresh() {
   [[ "$output" =~ ^[0-9a-f]{40}$ ]] || fail "fresh proposal emitted malformed head: $output"
   remote_head=$(git --git-dir="$remote" rev-parse "refs/heads/$branch")
   [ "$output" = "$remote_head" ] || fail 'fresh output differs from pushed head'
-  changed=$(git --git-dir="$remote" diff --name-only main "$branch")
-  [ "$changed" = flake.lock ] || fail "fresh proposal changed: $changed"
+  changed=$(git --git-dir="$remote" diff --name-only main "$branch" | sort)
+  [ "$changed" = "$atomic_paths" ] || fail "fresh proposal changed: $changed"
   grep -Fq 'gh pr create' "$effects" || fail 'fresh proposal did not create its PR'
 }
 
@@ -325,6 +453,9 @@ assert_pollution_with_remotes() {
     DAILY_AMARU_BOUNDARY_COMMENTS="$comments" \
     DAILY_AMARU_BOUNDARY_BOOTSTRAP_REMOTE="$bootstrap_remote" \
     DAILY_AMARU_BOUNDARY_REPOSITORY_REMOTE="$bootstrap_remote" \
+    DAILY_AMARU_BOUNDARY_RESOLVER_LOG="$resolver_log" \
+    DAILY_AMARU_BOUNDARY_NIX_LOG="$nix_log" \
+    DAILY_AMARU_BOUNDARY_SELECTED_CONFIGS_REV="$selected_configs_sha" \
     DAILY_AMARU_TRANSPORT="$transport" \
     run_boundary_command "$bin" "$controller" >"$stdout" 2>"$stderr" || controller_rc=$?
   [ -f "$receipt" ] ||
@@ -496,6 +627,9 @@ execute_value_operation() {
     DAILY_AMARU_BOUNDARY_COMMENTS="$comments" \
     DAILY_AMARU_BOUNDARY_BOOTSTRAP_REMOTE="$bootstrap_remote" \
     DAILY_AMARU_BOUNDARY_REPOSITORY_REMOTE="$consumer_remote" \
+    DAILY_AMARU_BOUNDARY_RESOLVER_LOG="$resolver_log" \
+    DAILY_AMARU_BOUNDARY_NIX_LOG="$nix_log" \
+    DAILY_AMARU_BOUNDARY_SELECTED_CONFIGS_REV="$selected_configs_sha" \
     DAILY_AMARU_BOUNDARY_HEAD_SHA="$workflow_head" \
     DAILY_AMARU_BOUNDARY_INTEGRATED_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
     run_boundary_command "$bin" "$transport" "$operation" "${arguments[@]}" \
@@ -863,6 +997,266 @@ assert_mutants() {
     'classification ran after local branch creation'
 }
 
+receipt_field() {
+  local key=$1 value=''
+  [ -f "$receipt" ] || return 0
+  while IFS='=' read -r field value; do
+    if [ "$field" = "$key" ]; then
+      printf '%s' "$value"
+      return 0
+    fi
+  done <"$receipt"
+}
+
+assert_atomic_fresh() {
+  local remote output remote_head changed commits lock record
+  local lock_amaru lock_configs record_amaru record_configs first_resolver
+  remote=$(create_remote fresh-atomic)
+  run_transport fresh-atomic "$remote"
+  output=$(cat "$stdout")
+  resolver_invocations=$(grep -c '^resolver ' "$resolver_log" || true)
+  [ "$resolver_invocations" -ge 2 ] ||
+    fail "resolver invocations=$resolver_invocations, want >=2 after Amaru override"
+  [ "$transport_rc" -eq 0 ] ||
+    fail "fresh atomic proposal failed: $(tr '\n' ' ' <"$stderr")"
+  [[ "$output" =~ ^[0-9a-f]{40}$ ]] ||
+    fail "fresh atomic proposal emitted malformed head: $output"
+  remote_head=$(git --git-dir="$remote" rev-parse "refs/heads/$branch")
+  [ "$output" = "$remote_head" ] || fail 'fresh atomic output differs from pushed head'
+  first_resolver=$(grep '^resolver ' "$resolver_log" | head -n 1)
+  [[ "$first_resolver" == *"amaru_rev=$upstream_sha"* ]] ||
+    fail "first resolver invocation was not after the Amaru override: $first_resolver"
+  [[ "$first_resolver" == *"cwd=$state/bootstrap"* ]] ||
+    fail "resolver was not clone-local: $first_resolver"
+  amaru_overrides=$(grep -c 'input=amaru ' "$nix_log" || true)
+  configs_overrides=$(grep -c 'input=cardano-configurations ' "$nix_log" || true)
+  [ "$amaru_overrides" -ge 1 ] || fail 'Amaru override was not invoked'
+  [ "$configs_overrides" -ge 1 ] || fail 'configurations override was not invoked'
+  changed=$(git --git-dir="$remote" diff --name-only main "$branch" | sort)
+  [ "$changed" = "$atomic_paths" ] ||
+    fail "fresh proposal changed: $changed"
+  changed_paths=$(printf '%s\n' "$changed" | grep -c . || true)
+  commits=$(git --git-dir="$remote" rev-list --count "main..$branch")
+  [ "$commits" -eq 1 ] || fail "fresh proposal commits=$commits, want 1"
+  proposal_commits=$commits
+  lock=$(git --git-dir="$remote" show "$branch:flake.lock")
+  record=$(git --git-dir="$remote" show "$branch:nix/peer-snapshots/resolution.json")
+  lock_amaru=$(jq -er '.nodes.amaru.locked.rev' <<<"$lock")
+  lock_configs=$(jq -er '.nodes["cardano-configurations"].locked.rev' <<<"$lock")
+  record_amaru=$(jq -er '.amaru_rev' <<<"$record")
+  record_configs=$(jq -er '.configs_rev' <<<"$record")
+  [ "$lock_amaru" = "$upstream_sha" ] &&
+    [ "$record_amaru" = "$upstream_sha" ] &&
+    [ "$lock_configs" = "$selected_configs_sha" ] &&
+    [ "$record_configs" = "$selected_configs_sha" ] ||
+    fail "tuple mismatch lock_amaru=$lock_amaru record_amaru=$record_amaru lock_configs=$lock_configs record_configs=$record_configs"
+  grep -Fq 'gh pr create' "$effects" || fail 'fresh atomic proposal did not create its PR'
+}
+
+assert_atomic_adopt() {
+  local remote before after output
+  remote=$(create_remote atomic-adopt)
+  before=$(seed_proposal "$remote" atomic)
+  run_transport atomic-adopt "$remote"
+  output=$(cat "$stdout")
+  after=$(git --git-dir="$remote" rev-parse "refs/heads/$branch")
+  [ "$transport_rc" -eq 0 ] ||
+    fail "coherent two-path branch was not adopted: $(tr '\n' ' ' <"$stderr")"
+  [ "$output" = "$before" ] ||
+    fail "atomic adopt emitted '$output', expected $before"
+  [ "$after" = "$before" ] || fail 'atomic adopt changed the remote ref'
+  ! grep -Fq 'gh pr create' "$effects" || fail 'atomic adopt attempted to create a PR'
+  grep -Fq 'gh pr view' "$effects" || fail 'atomic adopt did not reuse the existing PR'
+}
+
+assert_pr86_foreign() {
+  local remote before after
+  remote=$(create_remote pr86)
+  before=$(seed_proposal "$remote" lock-only)
+  run_transport pr86 "$remote"
+  after=$(git --git-dir="$remote" rev-parse "refs/heads/$branch")
+  [ "$transport_rc" -ne 0 ] || fail 'lock-only PR #86 shape was adopted'
+  [ ! -s "$stdout" ] || fail 'lock-only PR #86 shape emitted a value'
+  grep -Fq 'foreign-proposal-branch' "$stderr" ||
+    fail 'lock-only PR #86 shape lacked its named red'
+  [ "$after" = "$before" ] || fail 'lock-only PR #86 shape changed the remote ref'
+}
+
+assert_foreign_kind() {
+  local kind=$1 remote before after
+  remote=$(create_remote "foreign-$kind")
+  before=$(seed_proposal "$remote" "$kind")
+  run_transport "foreign-$kind" "$remote"
+  after=$(git --git-dir="$remote" rev-parse "refs/heads/$branch")
+  [ "$transport_rc" -ne 0 ] || fail "$kind proposal was adopted"
+  grep -Fq 'foreign-proposal-branch' "$stderr" ||
+    fail "$kind proposal lacked its named red"
+  [ "$after" = "$before" ] || fail "$kind proposal changed the remote ref"
+}
+
+assert_inconsistent_tuple_foreign() {
+  local field=$1 remote before after
+  remote=$(create_remote "inconsistent-$field")
+  before=$(seed_inconsistent_atomic "$remote" "$field")
+  run_transport "inconsistent-$field" "$remote"
+  after=$(git --git-dir="$remote" rev-parse "refs/heads/$branch")
+  [ "$transport_rc" -ne 0 ] || fail "inconsistent $field tuple was adopted"
+  grep -Fq 'foreign-proposal-branch' "$stderr" ||
+    fail "inconsistent $field tuple lacked its named red"
+  [ "$after" = "$before" ] || fail "inconsistent $field tuple changed the remote ref"
+}
+
+run_atomic_controller() {
+  local label=$1 bootstrap_remote=$2
+  local fail_mode=${3:-}
+  local upstream_remote
+  upstream_remote=$(create_remote "$label-upstream")
+  prepare_case "$label"
+  if [ -n "$fail_mode" ]; then
+    export DAILY_AMARU_BOUNDARY_RESOLVER_FAIL=$fail_mode
+  fi
+  controller_rc=0
+  GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0="url.file://$upstream_remote.insteadOf" \
+    GIT_CONFIG_VALUE_0=https://github.com/pragma-org/amaru.git \
+    GIT_CONFIG_NOSYSTEM=1 \
+    GIT_CONFIG_GLOBAL=/dev/null \
+    DAILY_AMARU_MODE=production \
+    DAILY_AMARU_DAY="$day" \
+    DAILY_AMARU_HEAD="$workflow_head" \
+    DAILY_AMARU_IDENTITY=boundary-bootstrap-token \
+    GH_TOKEN=boundary-repository-token \
+    DAILY_AMARU_STATE_DIR="$state" \
+    DAILY_AMARU_RECEIPT="$receipt" \
+    DAILY_AMARU_BOUNDARY_GH_LOG="$effects" \
+    DAILY_AMARU_BOUNDARY_COMMENTS="$comments" \
+    DAILY_AMARU_BOUNDARY_BOOTSTRAP_REMOTE="$bootstrap_remote" \
+    DAILY_AMARU_BOUNDARY_REPOSITORY_REMOTE="$bootstrap_remote" \
+    DAILY_AMARU_BOUNDARY_RESOLVER_LOG="$resolver_log" \
+    DAILY_AMARU_BOUNDARY_NIX_LOG="$nix_log" \
+    DAILY_AMARU_BOUNDARY_SELECTED_CONFIGS_REV="$selected_configs_sha" \
+    DAILY_AMARU_TRANSPORT="$transport" \
+    run_boundary_command "$bin" "$controller" >"$stdout" 2>"$stderr" ||
+    controller_rc=$?
+  unset DAILY_AMARU_BOUNDARY_RESOLVER_FAIL
+}
+
+assert_named_resolver_failure() {
+  local mode=$1 bootstrap_remote final_error stage
+  bootstrap_remote=$(create_remote "resolver-fail-$mode")
+  run_atomic_controller "resolver-fail-$mode" "$bootstrap_remote" "$mode"
+  resolver_failures=$((resolver_failures + 1))
+  final_error=$(receipt_field error)
+  stage=$(receipt_field stage)
+  if [ "$final_error" != peer-snapshot-resolution-failed ] ||
+    [ "$stage" != bootstrap-proposal ]; then
+    if git --git-dir="$bootstrap_remote" show-ref --verify --quiet \
+      "refs/heads/$branch"; then
+      fail "failing resolver was ignored; proposal was published error=${final_error:-missing}"
+    fi
+    fail "resolver failure receipt was not named: error=${final_error:-missing} stage=${stage:-missing}"
+  fi
+  named_receipts=$((named_receipts + 1))
+  if git --git-dir="$bootstrap_remote" show-ref --verify --quiet \
+    "refs/heads/$branch"; then
+    pushes_after_failure=$((pushes_after_failure + 1))
+    fail 'resolver failure pushed a proposal branch'
+  fi
+  if grep -Fq 'gh pr create' "$effects"; then
+    prs_after_failure=$((prs_after_failure + 1))
+    fail 'resolver failure created a PR'
+  fi
+  if grep -Eq 'workflow run|real-launch' "$effects" "$stderr"; then
+    launches=$((launches + 1))
+    fail 'resolver failure reached a launch effect'
+  fi
+}
+
+assert_resolver_token() {
+  local remote output
+  remote=$(create_remote resolver-token)
+  run_transport resolver-token "$remote" network
+  output=$(cat "$stdout")
+  [ "$transport_rc" -ne 0 ] || fail 'resolver failure returned success'
+  [ "$output" = RESOLVER-FAILED ] ||
+    fail "VALUE-CHANNEL leaked non-token bytes: $(od -An -tx1 "$stdout" | tr -d ' \n')"
+  if git --git-dir="$remote" show-ref --verify --quiet "refs/heads/$branch"; then
+    fail 'resolver failure pushed a proposal branch'
+  fi
+  ! grep -Fq 'gh pr create' "$effects" || fail 'resolver failure created a PR'
+}
+
+assert_skip_resolver_mutant() {
+  local mutant="$tmp_root/skip-resolver.sh" before after
+  before=$(grep -c 'resolve-peer-snapshots' "$transport" || true)
+  [ "$before" -ge 2 ] || fail 'cloned resolver is not invoked'
+  awk '
+    $0 == "invoke_cloned_resolver() {" || $0 == "resolver_failed() {" {
+      print
+      print "  : # skip-resolver-mutant"
+      print "  return 0"
+      print "}"
+      skipfn = 1
+      next
+    }
+    skipfn && $0 == "}" { skipfn = 0; next }
+    skipfn { next }
+    { print }
+  ' "$transport" >"$mutant"
+  after=$(grep -c 'skip-resolver-mutant' "$mutant" || true)
+  [ "$after" -eq 2 ] &&
+    [ "$(grep -c 'resolve-peer-snapshots' "$mutant" || true)" -eq 0 ] ||
+    fail 'skip-resolver mutation did not apply'
+  chmod +x "$mutant"
+  reject_scenario_mutant skip-resolver "$mutant" atomic-fresh \
+    'resolver invocations=0, want >=2 after Amaru override'
+  lock_only_mutants=$((lock_only_mutants + 1))
+}
+
+assert_token_drop_mutant() {
+  local mutant="$tmp_root/token-drop.sh"
+  grep -Fq "emit 'RESOLVER-FAILED'" "$transport" ||
+    fail 'resolver failure token is not emitted on the value channel'
+  sed "s/emit 'RESOLVER-FAILED'/true/g" "$transport" >"$mutant"
+  ! grep -Fq "emit 'RESOLVER-FAILED'" "$mutant" ||
+    fail 'token-drop mutation did not apply'
+  grep -Fq "peer-snapshot-resolution-failed" "$mutant" ||
+    fail 'token-drop mutation removed the failure path'
+  chmod +x "$mutant"
+  reject_scenario_mutant token-drop "$mutant" atomic-resolver-fail \
+    'resolver failure receipt was not named'
+}
+
+assert_atomic_peer_snapshot() {
+  local field kind
+  launches=0
+  assert_atomic_fresh
+  assert_resolver_token
+  assert_atomic_adopt
+  assert_pr86_foreign
+  for kind in record-only extra-path split; do
+    assert_foreign_kind "$kind"
+  done
+  for field in lock-amaru lock-configs record-amaru record-configs; do
+    assert_inconsistent_tuple_foreign "$field"
+  done
+  for kind in network nonzero malformed; do
+    assert_named_resolver_failure "$kind"
+  done
+  assert_skip_resolver_mutant
+  assert_token_drop_mutant
+  [ "$named_receipts" -eq "$resolver_failures" ] ||
+    fail "named_receipts=$named_receipts resolver_failures=$resolver_failures"
+  [ "$pushes_after_failure" -eq 0 ] || fail 'resolver failure had push effects'
+  [ "$prs_after_failure" -eq 0 ] || fail 'resolver failure had PR effects'
+  [ "$launches" -eq 0 ] || fail "launches=$launches, want 0"
+  printf 'PEER-SNAPSHOT-ATOMIC resolver_invocations=%s amaru_overrides=%s configs_overrides=%s changed_paths=%s commits=%s lock_only_mutants=%s resolver_failures=%s named_receipts=%s pushes_after_failure=%s prs_after_failure=%s launches=%s\n' \
+    "$resolver_invocations" "$amaru_overrides" "$configs_overrides" \
+    "$changed_paths" "$proposal_commits" "$lock_only_mutants" \
+    "$resolver_failures" "$named_receipts" "$pushes_after_failure" \
+    "$prs_after_failure" "$launches"
+}
+
 case "$scenario" in
   pollution)
     assert_pollution_closed
@@ -894,6 +1288,7 @@ case "$scenario" in
     assert_boundary_marker_derivation
     assert_boundary_census_derivation
     assert_guard_diagnostics
+    assert_atomic_peer_snapshot
     printf 'VALUE-CHANNEL operations=%s executed=%s census=complete mutants_rejected=%s\n' \
       "$value_operation_count" "$value_executed_count" "$value_mutants_rejected"
     printf 'VALUE-CHANNEL-FIRED reproduced=malformed-candidate-sha real_git=1 real_transport=1\n'
@@ -919,6 +1314,15 @@ case "$scenario" in
     ;;
   guard-marker-derivation)
     assert_boundary_marker_derivation
+    ;;
+  atomic-fresh)
+    assert_atomic_fresh
+    ;;
+  atomic-resolver-fail)
+    assert_named_resolver_failure network
+    ;;
+  atomic-peer-snapshot)
+    assert_atomic_peer_snapshot
     ;;
   *) fail "unknown scenario: $scenario" ;;
 esac
