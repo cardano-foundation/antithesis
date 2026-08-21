@@ -1634,10 +1634,12 @@ issue_223_declared_mutants=(
 issue_225_allowed_paths=(
   .github/workflows/daily-amaru.yaml
   scripts/daily-amaru-github.sh
+  scripts/daily-amaru.sh
   tests/test-daily-amaru.sh
   tests/fixtures/daily-amaru/boundary-gh.sh
   tests/fixtures/daily-amaru/boundary-docker.sh
   tests/fixtures/daily-amaru/boundary-nix.sh
+  tests/fixtures/daily-amaru/boundary-resolver.sh
   tests/fixtures/daily-amaru/test-transport-boundary.sh
   specs/225-transport-value-channel/data-model.md
   specs/225-transport-value-channel/functions-model.md
@@ -1645,6 +1647,12 @@ issue_225_allowed_paths=(
   specs/225-transport-value-channel/plan.md
   specs/225-transport-value-channel/spec.md
   specs/225-transport-value-channel/tasks.md
+  specs/227-atomic-peer-snapshot-bump/data-model.md
+  specs/227-atomic-peer-snapshot-bump/functions-model.md
+  specs/227-atomic-peer-snapshot-bump/modules-model.md
+  specs/227-atomic-peer-snapshot-bump/plan.md
+  specs/227-atomic-peer-snapshot-bump/spec.md
+  specs/227-atomic-peer-snapshot-bump/tasks.md
 )
 
 register_223_mutant() {

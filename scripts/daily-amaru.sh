@@ -273,6 +273,9 @@ write_receipt launch-attempt CLAIMED
 
 bootstrap_sha=''
 if ! bootstrap_sha=$(transport_call propose-bootstrap "$observed_sha"); then
+  if [ "$bootstrap_sha" = RESOLVER-FAILED ]; then
+    fail_stage bootstrap-proposal peer-snapshot-resolution-failed
+  fi
   fail_stage bootstrap-proposal proposal-failed
 fi
 [[ "$bootstrap_sha" =~ ^[0-9a-f]{40}$ ]] ||

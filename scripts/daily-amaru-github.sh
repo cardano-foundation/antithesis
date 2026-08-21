@@ -188,13 +188,38 @@ find_pr() {
     --json url --jq .url
 }
 
+atomic_path_census() {
+  local expected_lock=0 expected_record=0 path
+  [ "$#" -eq 2 ] || return 1
+  for path in "$@"; do
+    case "$path" in
+      flake.lock) expected_lock=1 ;;
+      nix/peer-snapshots/resolution.json) expected_record=1 ;;
+      *) return 1 ;;
+    esac
+  done
+  [ "$expected_lock" -eq 1 ] && [ "$expected_record" -eq 1 ]
+}
+
+lock_node_by_origin() {
+  local lock=$1 owner=$2 repo=$3
+  jq -r --arg owner "$owner" --arg repo "$repo" '
+    [.nodes | to_entries[] |
+     select(.value.original.owner == $owner and
+            .value.original.repo == $repo) | .key] |
+    if length == 1 then .[0] else empty end
+  ' <<<"$lock"
+}
+
 classify_proposal_branch() {
   local directory=$1
   local branch=$2
   local upstream_sha=$3
   local input_node=$4
   local remote_ref="refs/remotes/origin/$branch"
-  local merge_base changed_output lock
+  local merge_base changed_output lock record configs_node
+  local lock_amaru lock_configs record_amaru record_configs
+  local commit_count main_sha
   local -a changed=()
 
   if ! git -C "$directory" show-ref --verify --quiet "$remote_ref"; then
@@ -203,24 +228,71 @@ classify_proposal_branch() {
   fi
 
   merge_base=$(git -C "$directory" merge-base origin/main "$remote_ref") || return 1
+  main_sha=$(git -C "$directory" rev-parse origin/main) || return 1
+  commit_count=$(git -C "$directory" rev-list --count "$merge_base..$remote_ref") ||
+    return 1
   changed_output=$(git -C "$directory" diff --name-only "$merge_base" "$remote_ref") ||
     return 1
-  mapfile -t changed < <(printf '%s' "$changed_output")
-  if [ "${#changed[@]}" -ne 1 ] || [ "${changed[0]}" != flake.lock ]; then
+  mapfile -t changed < <(printf '%s\n' "$changed_output")
+  if [ "$merge_base" != "$main_sha" ] || [ "$commit_count" -ne 1 ] ||
+    ! atomic_path_census "${changed[@]}"; then
     printf 'foreign\n'
     return 0
   fi
 
   lock=$(git -C "$directory" show "$remote_ref:flake.lock") || return 1
-  if jq -e --arg node "$input_node" --arg sha "$upstream_sha" '
-      .nodes[$node].original.owner == "pragma-org" and
-      .nodes[$node].original.repo == "amaru" and
-      .nodes[$node].locked.rev == $sha
-    ' <<<"$lock" >/dev/null; then
+  if ! record=$(git -C "$directory" show "$remote_ref:nix/peer-snapshots/resolution.json"); then
+    printf 'foreign\n'
+    return 0
+  fi
+  configs_node=$(lock_node_by_origin "$lock" cardano-foundation cardano-configurations)
+  lock_amaru=$(jq -er --arg node "$input_node" '.nodes[$node].locked.rev' \
+    <<<"$lock") || {
+    printf 'foreign\n'
+    return 0
+  }
+  lock_configs=$(jq -er --arg node "$configs_node" '.nodes[$node].locked.rev' \
+    <<<"$lock") || {
+    printf 'foreign\n'
+    return 0
+  }
+  record_amaru=$(jq -er '.amaru_rev' <<<"$record") || {
+    printf 'foreign\n'
+    return 0
+  }
+  record_configs=$(jq -er '.configs_rev' <<<"$record") || {
+    printf 'foreign\n'
+    return 0
+  }
+  if [[ "$lock_amaru" =~ ^[0-9a-f]{40}$ ]] &&
+    [[ "$lock_configs" =~ ^[0-9a-f]{40}$ ]] &&
+    [ "$lock_amaru" = "$upstream_sha" ] &&
+    [ "$record_amaru" = "$upstream_sha" ] &&
+    [ "$lock_configs" = "$record_configs" ]; then
     printf 'adoptable\n'
   else
     printf 'foreign\n'
   fi
+}
+
+root_input_for_node() {
+  local lock_file=$1 node=$2
+  jq -r --arg node "$node" '
+    [.nodes.root.inputs | to_entries[] |
+     select((if (.value | type) == "array" then .value[0] else .value end) == $node) |
+     .key] | if length == 1 then .[0] else empty end
+  ' "$lock_file"
+}
+
+resolver_failed() {
+  emit 'RESOLVER-FAILED'
+  die 'peer-snapshot-resolution-failed'
+}
+
+invoke_cloned_resolver() {
+  local directory=$1
+  [ -x "$directory/scripts/resolve-peer-snapshots" ] || return 1
+  (cd "$directory" && ./scripts/resolve-peer-snapshots --write)
 }
 
 operation=${1:?transport operation is required}
@@ -324,19 +396,18 @@ case "$operation" in
 
     # TODO(amaru-bootstrap#75): replace this crude stock-pin proposal with
     # the validated producer handoff once that contract lands.
-    input_node=$(jq -r '
-      [.nodes | to_entries[] |
-       select(.value.original.owner == "pragma-org" and
-              .value.original.repo == "amaru") | .key] |
-      if length == 1 then .[0] else empty end
-    ' "$directory/flake.lock")
+    lock_text=$(<"$directory/flake.lock")
+    input_node=$(lock_node_by_origin "$lock_text" pragma-org amaru)
     [ -n "$input_node" ] || die 'expected exactly one stock pragma-org/amaru lock node'
-    input_name=$(jq -r --arg node "$input_node" '
-      [.nodes.root.inputs | to_entries[] |
-       select((if (.value | type) == "array" then .value[0] else .value end) == $node) |
-       .key] | if length == 1 then .[0] else empty end
-    ' "$directory/flake.lock")
+    input_name=$(root_input_for_node "$directory/flake.lock" "$input_node")
     [ -n "$input_name" ] || die 'expected exactly one root input for the stock Amaru node'
+    configs_node=$(lock_node_by_origin "$lock_text" cardano-foundation \
+      cardano-configurations)
+    [ -n "$configs_node" ] ||
+      die 'expected exactly one cardano-configurations lock node'
+    configs_input_name=$(root_input_for_node "$directory/flake.lock" "$configs_node")
+    [ -n "$configs_input_name" ] ||
+      die 'expected exactly one root input for cardano-configurations'
 
     proposal_state=$(classify_proposal_branch \
       "$directory" "$branch" "$upstream_sha" "$input_node") ||
@@ -355,21 +426,45 @@ case "$operation" in
         git -C "$directory" checkout -b "$branch" origin/main
         (
           cd "$directory"
-          nix flake lock --override-input "$input_name" "github:pragma-org/amaru/$upstream_sha"
+          nix flake lock --override-input "$input_name" \
+            "github:pragma-org/amaru/$upstream_sha"
         )
-        mapfile -t changed < <(git -C "$directory" diff --name-only)
-        [ "${#changed[@]}" -eq 1 ] && [ "${changed[0]}" = flake.lock ] ||
-          die 'stock-pin proposal changed a path other than flake.lock'
+        invoke_cloned_resolver "$directory" || true
+        record=$directory/nix/peer-snapshots/resolution.json
+        [ -f "$record" ] || resolver_failed
+        record_amaru=$(jq -er '.amaru_rev' "$record") || resolver_failed
+        record_configs=$(jq -er '.configs_rev' "$record") || resolver_failed
+        [ "$record_amaru" = "$upstream_sha" ] || resolver_failed
+        [[ "$record_configs" =~ ^[0-9a-f]{40}$ ]] || resolver_failed
+        (
+          cd "$directory"
+          nix flake lock --override-input "$configs_input_name" \
+            "github:cardano-foundation/cardano-configurations/$record_configs"
+        )
+        invoke_cloned_resolver "$directory" || resolver_failed
+        record_amaru=$(jq -er '.amaru_rev' "$record") || resolver_failed
+        record_configs=$(jq -er '.configs_rev' "$record") || resolver_failed
         jq -e --arg node "$input_node" --arg sha "$upstream_sha" '
           .nodes[$node].original.owner == "pragma-org" and
           .nodes[$node].original.repo == "amaru" and
           .nodes[$node].locked.rev == $sha
-        ' "$directory/flake.lock" >/dev/null || die 'stock Amaru lock validation failed'
-
-        git -C "$directory" add flake.lock
+        ' "$directory/flake.lock" >/dev/null || resolver_failed
+        jq -e --arg node "$configs_node" --arg sha "$record_configs" '
+          .nodes[$node].locked.rev == $sha
+        ' "$directory/flake.lock" >/dev/null || resolver_failed
+        jq -e --arg amaru "$upstream_sha" --arg configs "$record_configs" '
+          .amaru_rev == $amaru and .configs_rev == $configs
+        ' "$record" >/dev/null || resolver_failed
+        mapfile -t changed < <(git -C "$directory" diff --name-only)
+        atomic_path_census "${changed[@]}" || resolver_failed
+        git -C "$directory" add -- flake.lock nix/peer-snapshots/resolution.json
+        mapfile -t changed < <(git -C "$directory" diff --cached --name-only)
+        atomic_path_census "${changed[@]}" || resolver_failed
         git -C "$directory" -c user.name='daily-amaru' \
           -c user.email='daily-amaru@users.noreply.github.com' \
           commit -m "chore: bump stock Amaru to $upstream_sha"
+        [ "$(git -C "$directory" rev-list --count origin/main..HEAD)" -eq 1 ] ||
+          resolver_failed
         push_branch "$directory" "$branch" "$bootstrap_identity"
         pr_url=$(create_or_find_pr "$bootstrap_repository" "$branch" \
           "chore: bump stock Amaru to ${upstream_sha:0:12}" \
