@@ -1653,6 +1653,14 @@ issue_225_allowed_paths=(
   specs/227-atomic-peer-snapshot-bump/plan.md
   specs/227-atomic-peer-snapshot-bump/spec.md
   specs/227-atomic-peer-snapshot-bump/tasks.md
+  specs/229-bounded-check-observation/data-model.md
+  specs/229-bounded-check-observation/functions-model.md
+  specs/229-bounded-check-observation/modules-model.md
+  specs/229-bounded-check-observation/plan.md
+  specs/229-bounded-check-observation/spec.md
+  specs/229-bounded-check-observation/tasks.md
+  tests/fixtures/daily-amaru/check-observation.sh
+  tests/fixtures/daily-amaru/observation-gh.sh
 )
 
 register_223_mutant() {
@@ -2244,7 +2252,7 @@ allowed_path_count=${#issue_225_allowed_paths[@]}
 changed_paths_output=$(git -C "$repo_root" diff --name-only "$pre_slice_base" --) ||
   fail 'history baseline path diff is unreadable'
 mapfile -t changed_paths < <(printf '%s' "$changed_paths_output")
-paths_within_slice_fence "${changed_paths[@]}" || fail 'changed path outside #225 fence'
+paths_within_slice_fence "${changed_paths[@]}" || fail 'changed path outside slice fence'
 scope_mutant_paths=("${changed_paths[@]}" outside/issue-225-mutant)
 [ "${#scope_mutant_paths[@]}" -eq $((${#changed_paths[@]} + 1)) ] ||
   fail 'scope path mutation did not apply'
