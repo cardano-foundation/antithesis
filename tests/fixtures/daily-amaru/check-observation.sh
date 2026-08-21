@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 # Sourced by test-transport-boundary.sh for scenario check-observation.
 
+# Scalars owned and assigned by that harness: the first row at harness file
+# scope, the second rebound per scenario by prepare_case. Declaring them global
+# states the contract for readers and static analysis without assigning it, so
+# a scalar the harness stops providing still aborts on `set -u` instead of
+# expanding empty. `-g` keeps them global whatever scope the source site is in.
+# The harness also owns the boundary_seed_sources map read below.
+declare -g workflow_head day foreign_sha tmp_root fixture_root transport
+declare -g case_root bin effects receipt stdout stderr
+
 obs_start=1000000
 obs_candidate=$workflow_head
 
@@ -166,10 +175,12 @@ assert_exclusive_obs_path() {
   [ "$(command -v gh)" = "$bin/gh" ] || fail 'observation gh is not the stand-in'
   [ "$(command -v date)" = "$bin/date" ] || fail 'observation date is not the stand-in'
   [ "$(command -v sleep)" = "$bin/sleep" ] || fail 'observation sleep is not the stand-in'
-  [ -n "$host_date" ] && ! [ "$bin/date" -ef "$host_date" ] ||
+  if [ -z "$host_date" ] || [ "$bin/date" -ef "$host_date" ]; then
     fail 'observation date inherited the host clock'
-  [ -n "$host_sleep" ] && ! [ "$bin/sleep" -ef "$host_sleep" ] ||
+  fi
+  if [ -z "$host_sleep" ] || [ "$bin/sleep" -ef "$host_sleep" ]; then
     fail 'observation sleep inherited the host sleeper'
+  fi
 }
 
 run_obs() {
@@ -232,10 +243,10 @@ apply_immediate_read_mutant() {
     { print }
   ' "$src" >"$dest"
   chmod +x "$dest"
+  # shellcheck disable=SC2016 # literal mutant source text; must not expand
   grep -Fq 'bootstrap check is not uniquely successful on $candidate: $name' \
     "$dest" || fail 'immediate-read mutation did not apply'
-  grep -Fq 'observe_bootstrap_checks "$candidate" "$bootstrap_identity"' \
-    "$src" 2>/dev/null || true
+  # shellcheck disable=SC2016 # literal transport source text; must not expand
   if grep -Fq 'observe_bootstrap_checks "$candidate" "$bootstrap_identity"' \
     "$dest"; then
     fail 'immediate-read mutation left the bounded observer in the arm'
@@ -293,7 +304,9 @@ reject_dropped_pending_spelling() {
 
 reject_parse_as_empty_census() {
   local mutant=$tmp_root/parse-as-empty.sh
+  # shellcheck disable=SC2016 # literal transport source line; must not expand
   local old='    <<<"$runs") || return 1'
+  # shellcheck disable=SC2016 # literal replacement line; must not expand
   local new='    <<<"$runs") || run_tsv='
   replace_unique_line "$transport" "$mutant" "$old" "$new" parse-as-empty
   setup_obs parse-as-empty
@@ -310,6 +323,7 @@ reject_parse_as_empty_census() {
 
 reject_sleep_after_terminal_failure() {
   local mutant=$tmp_root/sleep-after-terminal-failure.sh
+  # shellcheck disable=SC2016 # literal transport source line; must not expand
   local old='        die "bootstrap check failed on $candidate: $first_failed polls=$polls"'
   [ "$(grep -Fxc "$old" "$transport" || true)" -eq 1 ] ||
     fail 'failed-die line is not unique'
@@ -347,7 +361,7 @@ run_check_observation_proof() {
   local wrong_head_rejected=0 duplicate_rejected=0 partial_retried=0
   local all_success=0 immediate_read=pending fire4=pending
   local host_inherited=1 real_effects=1
-  local mutant polls missing
+  local mutant polls
 
   bind_boundary_sources
 
@@ -836,6 +850,7 @@ reject_added_boundary_mutants() {
   local mutant anchor='  local runs workflow suite run_head jobs run_tsv'
 
   mutant=$tmp_root/added-boundary-marked.sh
+  # shellcheck disable=SC2016 # literal inserted source lines; must not expand
   insert_after_unique_line "$transport" "$mutant" "$anchor" \
     added-boundary-marked \
     '  observation_boundary extra-api' \
@@ -846,6 +861,7 @@ reject_added_boundary_mutants() {
   fi
 
   mutant=$tmp_root/added-boundary-unmarked.sh
+  # shellcheck disable=SC2016 # literal inserted source lines; must not expand
   insert_after_unique_line "$transport" "$mutant" "$anchor" \
     added-boundary-unmarked \
     '  with_identity "$identity" gh api "repos/$target_repository" >/dev/null ||' \
@@ -858,6 +874,7 @@ reject_added_boundary_mutants() {
 # Byte-identical to the archived submission-2 auditor payloads.
 apply_jobs_parse_as_empty_mutant() {
   local dest=$1
+  # shellcheck disable=SC2016 # literal source/replacement lines; must not expand
   replace_unique_line "$transport" "$dest" \
     '      <<<"$jobs" || return 1' \
     '      <<<"$jobs" || true # mutant maps malformed check-runs JSON to empty' \
@@ -994,6 +1011,7 @@ observation_boundary_receipt_case() {
 reject_out_of_band_boundary_record() {
   local mutant=$tmp_root/out-of-band-boundary-record.sh
   local record_state log
+  # shellcheck disable=SC2016 # literal source/replacement lines; must not expand
   replace_unique_line "$transport" "$mutant" \
     '      last_boundary=$(observation_boundary_receipt "$rows")' \
     '      last_boundary=$(cat "$state_dir/observation-boundary" 2>/dev/null || true)' \
