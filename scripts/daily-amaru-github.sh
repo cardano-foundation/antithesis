@@ -135,24 +135,207 @@ with_identity() {
   GH_TOKEN=$identity "$@"
 }
 
-collect_action_rows() {
+# The boundary a failing census was attempting must reach the caller, but
+# `rows=$(collect_action_rows ...)` discards the callee's variables.
+# Splitting the census from its entry point keeps the name in an ordinary
+# local -- no out-of-band record that could itself fail, go stale, or be
+# absent -- and the entry point appends it to the failure-path stdout the
+# caller already captures. Successful stdout is unchanged.
+observation_boundary() {
+  observation_boundary_name=$1
+}
+
+observation_boundary_receipt() {
+  sed -n 's/^observation-boundary \([a-z][a-z0-9-]*\)$/\1/p' <<<"$1" |
+    tail -n 1
+}
+
+collect_action_rows_census() {
   local target_repository=$1
   local head=$2
   local identity=${3:-${GH_TOKEN:-}}
-  local runs workflow suite run_head jobs
+  local runs workflow suite run_head jobs run_tsv
 
+  observation_boundary runs-api
   runs=$(with_identity "$identity" gh api \
-    "repos/$target_repository/actions/runs?head_sha=$head&per_page=100")
+    "repos/$target_repository/actions/runs?head_sha=$head&per_page=100") ||
+    return 1
+  # Process substitution would discard a jq parse failure as an empty census.
+  observation_boundary runs-parse
+  run_tsv=$(jq -r \
+    '.workflow_runs[] | [.name, (.check_suite_id | tostring), .head_sha] | @tsv' \
+    <<<"$runs") || return 1
   while IFS=$'\t' read -r workflow suite run_head; do
     [ -n "$suite" ] || continue
+    observation_boundary check-runs-api
     jobs=$(with_identity "$identity" gh api \
-      "repos/$target_repository/check-suites/$suite/check-runs?per_page=100")
-    jq -r --arg workflow "$workflow" --arg head "$run_head" '
-      .check_runs[] |
-      [$workflow, .name, (.head_sha // $head), (.conclusion // .status)] |
-      join("|")
-    ' <<<"$jobs"
-  done < <(jq -r '.workflow_runs[] | [.name, (.check_suite_id | tostring), .head_sha] | @tsv' <<<"$runs")
+      "repos/$target_repository/check-suites/$suite/check-runs?per_page=100") ||
+      return 1
+    observation_boundary check-runs-parse
+    jq -r --arg workflow "$workflow" --arg head "$run_head" \
+      '.check_runs[] | [$workflow, .name, (.head_sha // $head), (.conclusion // .status)] | join("|")' \
+      <<<"$jobs" || return 1
+  done <<<"$run_tsv"
+}
+
+collect_action_rows() {
+  local observation_boundary_name=''
+  collect_action_rows_census "$@" && return 0
+  [ -n "$observation_boundary_name" ] ||
+    die 'observation census failed before reaching any boundary'
+  printf 'observation-boundary %s\n' "$observation_boundary_name"
+  return 1
+}
+
+bootstrap_observation_duration() {
+  local target_repository=$1
+  local identity=$2
+  local duration runs
+
+  duration=${DAILY_AMARU_BOOTSTRAP_CHECK_DURATION_SECONDS:-}
+  if [[ "$duration" =~ ^[1-9][0-9]*$ ]]; then
+    printf '%s\n' "$duration"
+    return 0
+  fi
+  runs=$(with_identity "$identity" gh api \
+    "repos/$target_repository/actions/runs?per_page=30") || return 1
+  duration=$(jq -r '
+    [.workflow_runs[]
+     | select(.name == "Bootstrap CI")
+     | select(.status == "completed")
+     | select(.run_started_at != null and .updated_at != null)
+     | ((.updated_at | fromdateiso8601) - (.run_started_at | fromdateiso8601))]
+    | map(select(. > 0))
+    | if length == 0 then empty else (max | floor | tostring) end
+  ' <<<"$runs") || return 1
+  [[ "$duration" =~ ^[1-9][0-9]*$ ]] || return 1
+  printf '%s\n' "$duration"
+}
+
+classify_bootstrap_check() {
+  local name=$1
+  local candidate=$2
+  local rows=$3
+  local success=0 failed=0 pending=0 total=0
+  local check_name head state
+
+  while IFS='|' read -r _ check_name head state; do
+    [ "$check_name" = "$name" ] || continue
+    [ "$head" = "$candidate" ] || continue
+    total=$((total + 1))
+    case "$state" in
+      success) success=$((success + 1)) ;;
+      queued | in_progress | waiting | pending | requested)
+        pending=$((pending + 1))
+        ;;
+      *) failed=$((failed + 1)) ;;
+    esac
+  done <<<"$rows"
+
+  if [ "$total" -eq 0 ]; then
+    printf '%s\n' absent
+    return 0
+  fi
+  if [ "$failed" -gt 0 ] || [ "$success" -gt 1 ]; then
+    printf '%s\n' failed
+    return 0
+  fi
+  if [ "$success" -eq 1 ] && [ "$pending" -eq 0 ] && [ "$total" -eq 1 ]; then
+    printf '%s\n' success
+    return 0
+  fi
+  if [ "$success" -eq 1 ]; then
+    printf '%s\n' failed
+    return 0
+  fi
+  printf '%s\n' pending
+}
+
+observe_bootstrap_checks() {
+  local candidate=$1
+  local identity=$2
+  local checks duration start now deadline cadence remaining
+  local polls=0 rows status name
+  local first_incomplete='' first_failed='' last_boundary=''
+  local ever_valid=0 last_transport=0 all_success
+  local -a required=()
+
+  checks=${DAILY_AMARU_BOOTSTRAP_CHECKS:-Build,Run unit Tests,Check code quality,publish-images}
+  IFS=',' read -r -a required <<<"$checks"
+  [ "${#required[@]}" -gt 0 ] || die 'bootstrap required checks are empty'
+  now=$(date +%s) || die 'observation clock is unreadable'
+  [[ "$now" =~ ^[0-9]+$ ]] || die 'observation clock is unusable'
+  start=$now
+
+  while true; do
+    polls=$((polls + 1))
+    last_transport=0
+    first_incomplete=''
+    first_failed=''
+    all_success=1
+    if rows=$(collect_action_rows "$bootstrap_repository" "$candidate" \
+      "$identity"); then
+      ever_valid=1
+      for name in "${required[@]}"; do
+        status=$(classify_bootstrap_check "$name" "$candidate" "$rows")
+        case "$status" in
+          success) ;;
+          failed)
+            first_failed=$name
+            all_success=0
+            break
+            ;;
+          absent | pending)
+            all_success=0
+            if [ -z "$first_incomplete" ]; then
+              first_incomplete=$name
+            fi
+            ;;
+          *)
+            die "bootstrap check classifier returned unusable state $status"
+            ;;
+        esac
+      done
+      if [ -n "$first_failed" ]; then
+        die "bootstrap check failed on $candidate: $first_failed polls=$polls"
+      fi
+      if [ "$all_success" -eq 1 ]; then
+        printf 'bootstrap-check-observation polls=%s\n' "$polls" >&2
+        emit "$rows"
+        return 0
+      fi
+    else
+      last_transport=1
+      last_boundary=$(observation_boundary_receipt "$rows")
+      [ -n "$last_boundary" ] ||
+        die "bootstrap check observation boundary is unrecorded on $candidate polls=$polls"
+    fi
+
+    if [ -z "${deadline:-}" ]; then
+      duration=$(bootstrap_observation_duration "$bootstrap_repository" \
+        "$identity") ||
+        die "bootstrap check duration evidence is unusable on $candidate"
+      deadline=$((start + duration))
+      if [ "$duration" -le 1 ]; then
+        cadence=1
+      else
+        cadence=$((duration / 2))
+      fi
+    fi
+
+    now=$(date +%s) || die 'observation clock is unreadable'
+    if [ "$now" -ge "$deadline" ]; then
+      if [ "$last_transport" -eq 1 ] || [ "$ever_valid" -eq 0 ]; then
+        die "bootstrap check transport-exhausted on $candidate polls=$polls boundary=${last_boundary:-unnamed}"
+      fi
+      die "bootstrap check never-reported on $candidate: ${first_incomplete:-${required[0]}} polls=$polls"
+    fi
+    remaining=$((deadline - now))
+    if [ "$remaining" -gt "$cadence" ]; then
+      remaining=$cadence
+    fi
+    sleep "$remaining"
+  done
 }
 
 push_branch() {
@@ -478,18 +661,11 @@ case "$operation" in
     ;;
 
   require-bootstrap-checks)
-    require_commands gh jq awk
+    require_commands gh jq awk date sleep
     candidate=${1:?bootstrap candidate is required}
-    checks=${DAILY_AMARU_BOOTSTRAP_CHECKS:-Build,Run unit Tests,Check code quality,publish-images}
-    rows=$(collect_action_rows "$bootstrap_repository" "$candidate" "$bootstrap_identity")
-    IFS=',' read -r -a required <<<"$checks"
-    for name in "${required[@]}"; do
-      count=$(awk -F'|' -v n="$name" -v h="$candidate" \
-        '$2 == n && $3 == h && $4 == "success" { count++ } END { print count + 0 }' \
-        <<<"$rows")
-      [ "$count" -eq 1 ] || die "bootstrap check is not uniquely successful on $candidate: $name"
-    done
-    emit "$rows"
+    [[ "$candidate" =~ ^[0-9a-f]{40}$ ]] ||
+      die "invalid bootstrap candidate: $candidate"
+    observe_bootstrap_checks "$candidate" "$bootstrap_identity"
     ;;
 
   resolve-image)

@@ -1289,6 +1289,10 @@ case "$scenario" in
     assert_boundary_census_derivation
     assert_guard_diagnostics
     assert_atomic_peer_snapshot
+    # shellcheck disable=SC1091
+    . "$fixture_root/check-observation.sh"
+    run_check_observation_proof
+    run_check_observation_boundaries_proof
     printf 'VALUE-CHANNEL operations=%s executed=%s census=complete mutants_rejected=%s\n' \
       "$value_operation_count" "$value_executed_count" "$value_mutants_rejected"
     printf 'VALUE-CHANNEL-FIRED reproduced=malformed-candidate-sha real_git=1 real_transport=1\n'
@@ -1323,6 +1327,16 @@ case "$scenario" in
     ;;
   atomic-peer-snapshot)
     assert_atomic_peer_snapshot
+    ;;
+  check-observation)
+    # shellcheck disable=SC1091
+    . "$fixture_root/check-observation.sh"
+    run_check_observation_proof
+    ;;
+  check-observation-boundaries)
+    # shellcheck disable=SC1091
+    . "$fixture_root/check-observation.sh"
+    run_check_observation_boundaries_proof
     ;;
   *) fail "unknown scenario: $scenario" ;;
 esac
