@@ -71,19 +71,20 @@ completeness and run correlation remain cna#206/cna#207.
 
 ## Invariants
 
-All rows are blocking.
+All rows are required for ticket acceptance. Their mutation-campaign severity
+is `ADVISORY`: none constrains chain state, money, or a signature.
 
-| ID | Observable truth | Demonstrated failure | Observable success |
-|---|---|---|---|
-| INV-232-1 | Watchdog reachability is independent of the producer | the synthetic model contains no producer run and no receipt | the independently invoked watchdog returns `ABSENT`, reconciles an alarm, and exits non-zero |
-| INV-232-2 | The scheduled target is the previous closed UTC day | clock values across month/year boundaries and near midnight are injected; supplied producer data is absent | output names the mathematically previous UTC date and its exact closed interval |
-| INV-232-3 | Presence is an authentic dated receipt, not an accidental match | wrong marker, wrong day, before/after timestamps, malformed JSON, and later pages are varied independently | only an exact marker/day comment inside the interval contributes to the positive count |
-| INV-232-4 | Missing receipt makes the real signal red | the synthetic receipt set is empty | reconciliation creates the canonical incident, evidence says `ABSENT count=0`, and the command exits non-zero |
-| INV-232-5 | Repeats converge without erasing history | the same absent day is retried and a second absent day follows | exactly one open marked incident exists and contains exactly one durable row for each day |
-| INV-232-6 | Recovery is visible and never silently closes red | a valid receipt is restored while the incident remains open | verdict is `PRESENT`, evidence names a positive count, no new incident exists, and the prior incident remains open |
-| INV-232-7 | Observation and reconciliation failures fail closed | read, pagination, parse, create, and update boundaries are individually failed | each exits non-zero with a distinct error and no false green or misleading history claim |
-| INV-232-8 | Production wiring and proof wiring cannot become vacuous | mutations remove the schedule caller, substitute the producer workflow, skip the script, or bypass a control leg | CI executes both red and green controls while the scheduled job directly calls the watchdog |
-| INV-232-9 | Evidence is public-safe and revision-bound | secret-shaped fixture values and unstable URLs are supplied | evidence omits them and names exact SHA, day, stable GitHub IDs, and verdict |
+| ID | Severity | Observable truth | Demonstrated failure | Observable success |
+|---|---|---|---|---|
+| INV-232-1 | ADVISORY | Watchdog reachability is independent of the producer | the synthetic model contains no producer run and no receipt | the independently invoked watchdog returns `ABSENT`, reconciles an alarm, and exits non-zero |
+| INV-232-2 | ADVISORY | The scheduled target is the previous closed UTC day | clock values across month/year boundaries and near midnight are injected; supplied producer data is absent | output names the mathematically previous UTC date and its exact closed interval |
+| INV-232-3 | ADVISORY | Presence is an authentic dated receipt, not an accidental match | wrong marker, wrong day, before/after timestamps, malformed JSON, and later pages are varied independently | only an exact marker/day comment inside the interval contributes to the positive count |
+| INV-232-4 | ADVISORY | Missing receipt makes the real signal red | the synthetic receipt set is empty | reconciliation creates the canonical incident, evidence says `ABSENT count=0`, and the command exits non-zero |
+| INV-232-5 | ADVISORY | Repeats converge without erasing history | the same absent day is retried and a second absent day follows | exactly one open marked incident exists and contains exactly one durable row for each day |
+| INV-232-6 | ADVISORY | Recovery is visible and never silently closes red | a valid receipt is restored while the incident remains open | verdict is `PRESENT`, evidence names a positive count, no new incident exists, and the prior incident remains open |
+| INV-232-7 | ADVISORY | Observation and reconciliation failures fail closed | read, pagination, parse, create, and update boundaries are individually failed | each exits non-zero with a distinct error and no false green or misleading history claim |
+| INV-232-8 | ADVISORY | Production wiring and proof wiring cannot become vacuous | mutations remove the schedule caller, substitute the producer workflow, skip the script, or bypass a control leg | CI executes both red and green controls while the scheduled job directly calls the watchdog |
+| INV-232-9 | ADVISORY | Evidence is public-safe and revision-bound | secret-shaped fixture values and unstable URLs are supplied | evidence omits them and names exact SHA, day, stable GitHub IDs, and verdict |
 
 ## Observable success
 
