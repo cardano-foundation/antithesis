@@ -84,7 +84,7 @@ assert_honest_failure_receipt() {
   local stage=$1
   assert_file_contains "$case_receipt" "stage=$stage"
   assert_file_contains "$case_receipt" 'outcome=FAILED'
-  assert_file_lacks "$case_receipt" 'outcome=(UNCHANGED|CHANGED|SUCCESS)|run_outcome=success|findings_complete=true'
+  assert_file_lacks "$case_receipt" 'outcome=(UNCHANGED|AWAITING|CHANGED|SUCCESS)|run_outcome=(success|awaiting-integration)|findings_complete=true'
 }
 
 assert_workflow_literal_once() {
@@ -104,7 +104,7 @@ receipt_oracle() {
   for field in "day=$day" "stage=$stage" 'outcome=FAILED' "error=$error"; do
     grep -Fqx -- "$field" "$receipt" || return 1
   done
-  if grep -Eq '^(outcome=(UNCHANGED|CHANGED|SUCCESS)|run_outcome=(success|requested))$' \
+  if grep -Eq '^(outcome=(UNCHANGED|AWAITING|CHANGED|SUCCESS)|run_outcome=(success|requested|awaiting-integration))$' \
     "$receipt"; then
     return 1
   fi
@@ -292,8 +292,9 @@ transport_branch() {
 
 bootstrap_boundary_operations=(propose-bootstrap require-bootstrap-checks)
 repository_boundary_operations=(
-  claim-day last-success-sha claim-sha-attempt claim-launch prepare-consumer-repin
-  require-consumer-checks await-supervised-integration real-launch receipt
+  claim-day last-success-sha awaiting-integration-age claim-sha-attempt claim-launch
+  prepare-consumer-repin require-consumer-checks await-supervised-integration
+  real-launch receipt
 )
 
 # INV-213-03: the minted token must be unreachable from every same-repository
@@ -632,6 +633,50 @@ assert_file_contains "$case_receipt" 'outcome=UNCHANGED'
 assert_no_mutation
 assert_no_launch
 pass unchanged
+
+run_case awaiting-integration
+require_success
+assert_file_contains "$case_receipt" 'stage=complete'
+assert_file_contains "$case_receipt" 'outcome=AWAITING'
+assert_file_contains "$case_receipt" 'run_outcome=awaiting-integration'
+assert_file_contains "$case_stdout" \
+  'AWAITING 2026-07-31 1111111111111111111111111111111111111111 https://example.invalid/pull/17'
+assert_log_count 1 '^await-supervised-integration '
+assert_log_count 1 '^awaiting-integration-age '
+assert_no_launch
+pass awaiting-integration
+
+DAILY_AMARU_AWAITING_MAX_DAYS=3 run_case awaiting-integration-threshold
+require_success
+assert_file_contains "$case_receipt" 'outcome=AWAITING'
+assert_file_contains "$case_receipt" 'run_outcome=awaiting-integration'
+assert_no_launch
+pass awaiting-integration-at-threshold
+
+for integration_case in integration-head-mismatch integration-not-exact-main; do
+  run_case "$integration_case"
+  require_failure
+  assert_no_launch
+  assert_honest_failure_receipt supervised-integration
+  case "$integration_case" in
+    integration-head-mismatch)
+      assert_file_contains "$case_stderr" \
+        'daily-amaru-github: integrated PR head differs from the verified candidate'
+      ;;
+    integration-not-exact-main)
+      assert_file_contains "$case_stderr" \
+        'daily-amaru-github: merged consumer commit is not exact current main'
+      ;;
+  esac
+  pass "$integration_case"
+done
+
+DAILY_AMARU_AWAITING_MAX_DAYS=3 run_case awaiting-integration-stale
+require_failure
+assert_no_launch
+assert_honest_failure_receipt supervised-integration
+assert_file_contains "$case_receipt" 'error=awaiting-integration-stale-4-days'
+pass awaiting-integration-stale-alarm
 
 for observation in zero-observation ambiguous-observation; do
   run_case "$observation"
@@ -1639,6 +1684,7 @@ issue_225_allowed_paths=(
   tests/test-daily-amaru.sh
   tests/fixtures/daily-amaru/boundary-gh.sh
   tests/fixtures/daily-amaru/boundary-docker.sh
+  tests/fixtures/daily-amaru/fake-transport.sh
   tests/fixtures/daily-amaru/boundary-nix.sh
   tests/fixtures/daily-amaru/boundary-resolver.sh
   tests/fixtures/daily-amaru/test-transport-boundary.sh

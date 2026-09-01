@@ -594,6 +594,78 @@ case "$operation" in
     [ -z "$last_success" ] || emit "$last_success"
     ;;
 
+  awaiting-integration-age)
+    # repository-token-permissions: issues=read
+    require_commands gh awk date
+    sha=${1:?upstream SHA is required}
+    current_day=${2:?current day is required}
+    [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || die "invalid upstream SHA: $sha"
+    normalized_day=$(date -u --date="$current_day" +%F) || die 'invalid current day'
+    [ "$normalized_day" = "$current_day" ] || die 'invalid current day'
+    receipt_rows=''
+    receipt_rows=$(issue_bodies | awk '
+      function flush_receipt() {
+        if (in_receipt && stage == "complete" && outcome == "AWAITING" &&
+            run_outcome == "awaiting-integration" && day != "" && sha != "") {
+          print day "|" sha
+        }
+      }
+      $0 == "<!-- daily-amaru receipt -->" {
+        flush_receipt()
+        in_receipt = 1
+        day = stage = outcome = run_outcome = sha = ""
+        next
+      }
+      in_receipt && /^<!-- / {
+        flush_receipt()
+        in_receipt = 0
+        next
+      }
+      in_receipt && /^- day=/ {
+        day = $0
+        sub(/^- day=/, "", day)
+        next
+      }
+      in_receipt && /^- stage=/ {
+        stage = $0
+        sub(/^- stage=/, "", stage)
+        next
+      }
+      in_receipt && /^- outcome=/ {
+        outcome = $0
+        sub(/^- outcome=/, "", outcome)
+        next
+      }
+      in_receipt && /^- upstream_sha=/ {
+        sha = $0
+        sub(/^- upstream_sha=/, "", sha)
+        next
+      }
+      in_receipt && /^- run_outcome=/ {
+        run_outcome = $0
+        sub(/^- run_outcome=/, "", run_outcome)
+        next
+      }
+      END { flush_receipt() }
+    ') || die 'awaiting receipt census failed'
+    declare -A awaiting_days=()
+    while IFS='|' read -r receipt_day receipt_sha; do
+      [ "$receipt_sha" = "$sha" ] || continue
+      [[ "$receipt_day" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
+      awaiting_days["$receipt_day"]=1
+    done <<<"$receipt_rows"
+    awaiting_age=1
+    cursor=$current_day
+    while :; do
+      previous_day=$(date -u --date="$cursor -1 day" +%F) ||
+        die 'could not derive previous receipt day'
+      [[ -v "awaiting_days[$previous_day]" ]] || break
+      awaiting_age=$((awaiting_age + 1))
+      cursor=$previous_day
+    done
+    emit "$awaiting_age"
+    ;;
+
   claim-sha-attempt)
     # repository-token-permissions: issues=write
     require_commands gh grep
@@ -819,7 +891,11 @@ case "$operation" in
     state=$(jq -r .state <<<"$pr_json")
     head=$(jq -r .headRefOid <<<"$pr_json")
     merged=$(jq -r '.mergeCommit.oid // empty' <<<"$pr_json")
-    [ "$state" = MERGED ] || die 'consumer repin is awaiting guarded integration'
+    if [ "$state" != MERGED ]; then
+      emit "AWAITING $pr_url"
+      printf 'daily-amaru-github: consumer repin is awaiting guarded integration\n' >&2
+      exit 75
+    fi
     [ "$head" = "$candidate" ] || die 'integrated PR head differs from the verified candidate'
     [[ "$merged" =~ ^[0-9a-f]{40}$ ]] || die 'missing merge commit SHA'
     main_head=$(with_identity "$repository_identity" gh api "repos/$repository/git/ref/heads/main" \
