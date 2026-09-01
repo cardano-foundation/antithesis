@@ -183,10 +183,21 @@ assert_exclusive_obs_path() {
   fi
 }
 
+# These scenarios exercise the observation *mechanism* -- polling, cadence,
+# classification, fail-closed -- so they inject the surface they stage rather
+# than inheriting production's. The shipped defaults are a separate claim about
+# `lambdasistemi/amaru-bootstrap` and are pinned by
+# `bootstrap_surface_defaults_hold` in tests/test-daily-amaru.sh; injecting here
+# is what keeps this fixture from silently re-asserting them.
+obs_workflow='Bootstrap CI'
+obs_checks='Build,Run unit Tests,Check code quality,publish-images'
+
 run_obs() {
   local extra_transport=${1:-$transport}
   transport_rc=0
   DAILY_AMARU_DAY=$day \
+    DAILY_AMARU_BOOTSTRAP_CHECK_WORKFLOW=$obs_workflow \
+    DAILY_AMARU_BOOTSTRAP_CHECKS=$obs_checks \
     DAILY_AMARU_IDENTITY=boundary-bootstrap-token \
     GH_TOKEN=boundary-repository-token \
     GIT_CONFIG_NOSYSTEM=1 \

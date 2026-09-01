@@ -85,12 +85,12 @@ case "${1:-} ${2:-}" in
     elif [ "$#" -eq 2 ] && [[ "$2" == repos/*/actions/runs\?head_sha=*\&per_page=100 ]]; then
       target=${2#repos/}; target=${target%%/actions/*}
       if [ "$target" = "${DAILY_AMARU_BOOTSTRAP_REPOSITORY:-lambdasistemi/amaru-bootstrap}" ]; then
-        printf '{"workflow_runs":[{"name":"Bootstrap CI","check_suite_id":10,"head_sha":"%s"}]}\n' "$head_sha"
+        printf '{"workflow_runs":[{"name":"CI","check_suite_id":10,"head_sha":"%s"}]}\n' "$head_sha"
       else
         printf '{"workflow_runs":[{"name":"Build and push component images for cardano-node testnet","check_suite_id":1,"head_sha":"%s"},{"name":"tracer-sidecar CI","check_suite_id":2,"head_sha":"%s"},{"name":"Build documentation","check_suite_id":3,"head_sha":"%s"},{"name":"PR preview","check_suite_id":4,"head_sha":"%s"}]}\n' "$head_sha" "$head_sha" "$head_sha" "$head_sha"
       fi
     elif [ "$#" -eq 2 ] && [[ "$2" == repos/*/check-suites/10/check-runs\?per_page=100 ]]; then
-      printf '{"check_runs":[{"name":"Build","head_sha":"%s","conclusion":"success"},{"name":"Run unit Tests","head_sha":"%s","conclusion":"success"},{"name":"Check code quality","head_sha":"%s","conclusion":"success"},{"name":"publish-images","head_sha":"%s","conclusion":"success"}]}\n' "$head_sha" "$head_sha" "$head_sha" "$head_sha"
+      printf '{"check_runs":[{"name":"Build Gate","head_sha":"%s","conclusion":"success"},{"name":"Live Bootstrap Producer","head_sha":"%s","conclusion":"success"}]}\n' "$head_sha" "$head_sha"
     elif [ "$#" -eq 2 ] && [[ "$2" == repos/*/check-suites/[1-4]/check-runs\?per_page=100 ]]; then
       suite=${2#*/check-suites/}; suite=${suite%%/*}
       case "$suite" in

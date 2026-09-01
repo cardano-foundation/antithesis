@@ -37,6 +37,18 @@ consumer_required_checks=(
   'PR preview|preview'
 )
 
+# The bootstrap surface belongs to `lambdasistemi/amaru-bootstrap`, not to this
+# repository, and the two must never be confused: the names below are the ones
+# that repository actually publishes. `CI` is `.github/workflows/ci.yml`, whose
+# jobs are `Build Gate` (`build-gate`) and `Live Bootstrap Producer`
+# (`live-bootstrap-producer`). A name absent from that repository yields no
+# duration evidence and no candidate-exact rows, so the observation fails for a
+# reason unrelated to the candidate -- which is what made every scheduled run
+# between 2026-08-23 and 2026-09-01 red within seconds.
+bootstrap_check_workflow=${DAILY_AMARU_BOOTSTRAP_CHECK_WORKFLOW:-CI}
+bootstrap_required_checks=${DAILY_AMARU_BOOTSTRAP_CHECKS:-Build Gate,Live Bootstrap Producer}
+poll_ceiling=${DAILY_AMARU_BOOTSTRAP_CHECK_POLL_SECONDS:-60}
+
 die() {
   printf 'daily-amaru-github: %s\n' "$*" >&2
   exit 1
@@ -114,6 +126,13 @@ claim_prelaunch_marker() {
       found=1
       previous_head=$recorded_head
       if [ "$recorded_head" = "$head" ]; then # unchanged-head-guard
+        # The verdict stays the machine-readable token `claim_operation`
+        # parses; why the nightly declined to act belongs beside it in the
+        # log. Runs 33292550661 and 33357412134 were red for two days on the
+        # bare token alone, which names neither input nor the earlier attempt
+        # this one would have repeated.
+        printf 'daily-amaru-github: declining to repeat an attempt: %s=%s was already claimed at controller head %s and neither has moved since; the outcome of that earlier attempt still stands\n' \
+          "$kind" "$value" "$head" >&2
         emit 'BLOCKED unchanged-head'
         return 1
       fi
@@ -187,29 +206,62 @@ collect_action_rows() {
   return 1
 }
 
+# D229-2 fails closed on unbounded evidence. A historical run that hung far
+# longer than this job may live cannot describe a window this run could
+# observe, so such a sample is discarded rather than clamped into the window:
+# clamping would substitute exactly the "unrelated constant" D229-2 forbids.
+# The surviving maximum is still observed evidence, never a default.
+bootstrap_observation_ceiling() {
+  local ceiling=${DAILY_AMARU_BOOTSTRAP_CHECK_MAX_SECONDS:-7200}
+  [[ "$ceiling" =~ ^[1-9][0-9]*$ ]] ||
+    die "bootstrap observation ceiling is unusable: $ceiling"
+  printf '%s\n' "$ceiling"
+}
+
 bootstrap_observation_duration() {
   local target_repository=$1
   local identity=$2
-  local duration runs
+  local duration runs ceiling
 
   duration=${DAILY_AMARU_BOOTSTRAP_CHECK_DURATION_SECONDS:-}
   if [[ "$duration" =~ ^[1-9][0-9]*$ ]]; then
     printf '%s\n' "$duration"
     return 0
   fi
+  ceiling=$(bootstrap_observation_ceiling) || return 1
   runs=$(with_identity "$identity" gh api \
     "repos/$target_repository/actions/runs?per_page=30") || return 1
-  duration=$(jq -r '
+  duration=$(jq -r --arg workflow "$bootstrap_check_workflow" \
+    --argjson ceiling "$ceiling" '
     [.workflow_runs[]
-     | select(.name == "Bootstrap CI")
+     | select(.name == $workflow)
      | select(.status == "completed")
      | select(.run_started_at != null and .updated_at != null)
      | ((.updated_at | fromdateiso8601) - (.run_started_at | fromdateiso8601))]
-    | map(select(. > 0))
+    | map(select(. > 0 and . <= $ceiling))
     | if length == 0 then empty else (max | floor | tostring) end
   ' <<<"$runs") || return 1
   [[ "$duration" =~ ^[1-9][0-9]*$ ]] || return 1
   printf '%s\n' "$duration"
+}
+
+# A required name that never appears is indistinguishable from a check that
+# never ran, unless the census also says what the candidate did publish.
+# Naming the observed surface turns a required/actual name mismatch into a
+# one-night diagnosis instead of a timeout repeated nightly. `awk` only: `sort`
+# is not a member of the scheduled command census.
+observed_check_surface() {
+  local candidate=$1
+  local rows=$2
+  local surface
+  surface=$(awk -F'|' -v head="$candidate" '
+    $3 == head && !seen[$1 "/" $2]++ {
+      list = list separator $1 "/" $2
+      separator = ","
+    }
+    END { print list }
+  ' <<<"$rows")
+  printf '%s\n' "${surface:-none}"
 }
 
 classify_bootstrap_check() {
@@ -260,7 +312,7 @@ observe_bootstrap_checks() {
   local ever_valid=0 last_transport=0 all_success
   local -a required=()
 
-  checks=${DAILY_AMARU_BOOTSTRAP_CHECKS:-Build,Run unit Tests,Check code quality,publish-images}
+  checks=$bootstrap_required_checks
   IFS=',' read -r -a required <<<"$checks"
   [ "${#required[@]}" -gt 0 ] || die 'bootstrap required checks are empty'
   now=$(date +%s) || die 'observation clock is unreadable'
@@ -314,12 +366,18 @@ observe_bootstrap_checks() {
     if [ -z "${deadline:-}" ]; then
       duration=$(bootstrap_observation_duration "$bootstrap_repository" \
         "$identity") ||
-        die "bootstrap check duration evidence is unusable on $candidate"
+        die "bootstrap check duration evidence is unusable on $candidate: no completed '$bootstrap_check_workflow' run in $bootstrap_repository within the observation ceiling"
       deadline=$((start + duration))
       if [ "$duration" -le 1 ]; then
         cadence=1
       else
         cadence=$((duration / 2))
+      fi
+      # Half of a long window is a poll rate that can miss a check reporting
+      # and completing between two observations. The window stays evidence-
+      # derived; only how often it is looked at is bounded.
+      if [ "$cadence" -gt "$poll_ceiling" ]; then
+        cadence=$poll_ceiling
       fi
     fi
 
@@ -328,7 +386,7 @@ observe_bootstrap_checks() {
       if [ "$last_transport" -eq 1 ] || [ "$ever_valid" -eq 0 ]; then
         die "bootstrap check transport-exhausted on $candidate polls=$polls boundary=${last_boundary:-unnamed}"
       fi
-      die "bootstrap check never-reported on $candidate: ${first_incomplete:-${required[0]}} polls=$polls"
+      die "bootstrap check never-reported on $candidate: ${first_incomplete:-${required[0]}} polls=$polls observed=$(observed_check_surface "$candidate" "$rows")"
     fi
     remaining=$((deadline - now))
     if [ "$remaining" -gt "$cadence" ]; then
