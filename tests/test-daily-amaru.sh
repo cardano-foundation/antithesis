@@ -1633,6 +1633,7 @@ issue_223_declared_mutants=(
 )
 issue_225_allowed_paths=(
   .github/workflows/daily-amaru.yaml
+  docs/daily-amaru.md
   scripts/daily-amaru-github.sh
   scripts/daily-amaru.sh
   tests/test-daily-amaru.sh
@@ -2353,6 +2354,59 @@ printf 'PROOF-CENSUS invariants=%s claim_operations=%s mutants_rejected=%s resid
   "${#issue_223_declared_invariants[@]}" "$claim_operation_count" \
   "${#registered_mutants[@]}" "$proof_residuals"
 pass issue-223-manual-production-cap
+
+# The observation surface is a claim about another repository, and every
+# scheduled run between 2026-08-23 and 2026-09-01 was red because that claim was
+# false: the transport waited on a workflow named "Bootstrap CI" and four check
+# names lifted from this repository's own CI, none of which
+# `lambdasistemi/amaru-bootstrap` publishes. The mechanism tests could not see
+# it -- their fixtures asserted the same names back. Nothing here reaches the
+# network; this pins the shipped defaults against the surface recorded in
+# docs/daily-amaru.md so a rename must break a test rather than a nightly.
+bootstrap_surface_default() {
+  local variable=$1 override=$2 source=${3:-$transport}
+  sed -n "s/^$variable=\${$override:-\(.*\)}\$/\1/p" "$source"
+}
+
+bootstrap_surface_defaults_hold() {
+  local source=${1:-$transport}
+  local workflow checks
+  workflow=$(bootstrap_surface_default bootstrap_check_workflow \
+    DAILY_AMARU_BOOTSTRAP_CHECK_WORKFLOW "$source")
+  checks=$(bootstrap_surface_default bootstrap_required_checks \
+    DAILY_AMARU_BOOTSTRAP_CHECKS "$source")
+  [ "$workflow" = 'CI' ] || return 1
+  [ "$checks" = 'Build Gate,Live Bootstrap Producer' ] || return 1
+}
+
+bootstrap_surface_defaults_hold ||
+  fail "shipped bootstrap surface is not lambdasistemi/amaru-bootstrap's: workflow=$(bootstrap_surface_default bootstrap_check_workflow DAILY_AMARU_BOOTSTRAP_CHECK_WORKFLOW) checks=$(bootstrap_surface_default bootstrap_required_checks DAILY_AMARU_BOOTSTRAP_CHECKS)"
+
+# The dead names must not survive anywhere in the production surface: the
+# consumer's own required checks are a separate array and must not be reachable
+# as a bootstrap default again.
+for dead_name in 'Bootstrap CI' 'Build,Run unit Tests,Check code quality,publish-images'; do
+  if grep -Fq -- "$dead_name" "$transport" "$controller"; then
+    fail "retired bootstrap surface name is still shipped: $dead_name"
+  fi
+done
+
+# A check that has never failed is not evidence. Both halves of the claim are
+# mutated back to the exact strings that produced the eleven red nights.
+# shellcheck disable=SC2016
+reject_mutant bootstrap-surface-workflow.sh "$transport" \
+  's#^bootstrap_check_workflow=${DAILY_AMARU_BOOTSTRAP_CHECK_WORKFLOW:-CI}$#bootstrap_check_workflow=${DAILY_AMARU_BOOTSTRAP_CHECK_WORKFLOW:-Bootstrap CI}#' \
+  'DAILY_AMARU_BOOTSTRAP_CHECK_WORKFLOW:-Bootstrap CI' \
+  'a duration probe naming a workflow amaru-bootstrap does not publish' \
+  bootstrap_surface_defaults_hold
+# shellcheck disable=SC2016
+reject_mutant bootstrap-surface-checks.sh "$transport" \
+  's#^bootstrap_required_checks=${DAILY_AMARU_BOOTSTRAP_CHECKS:-Build Gate,Live Bootstrap Producer}$#bootstrap_required_checks=${DAILY_AMARU_BOOTSTRAP_CHECKS:-Build,Run unit Tests,Check code quality,publish-images}#' \
+  'DAILY_AMARU_BOOTSTRAP_CHECKS:-Build,Run unit Tests' \
+  'required bootstrap checks copied from this repository CI' \
+  bootstrap_surface_defaults_hold
+printf 'BOOTSTRAP-SURFACE workflow=CI checks=2 retired_names=2 mutants_rejected=2\n'
+pass bootstrap-surface-defaults
 
 # Issue #225: execute the real transport at a local git boundary. The focused
 # fixture owns its repositories under mktemp and never reads this checkout's

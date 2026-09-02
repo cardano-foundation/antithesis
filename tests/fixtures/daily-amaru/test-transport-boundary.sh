@@ -578,9 +578,9 @@ execute_value_operation() {
     propose-bootstrap) arguments=("$upstream_sha") ;;
     require-bootstrap-checks)
       arguments=("$workflow_head")
-      expected=$(printf 'Bootstrap CI|%s|%s|success\n' \
-        Build "$workflow_head" 'Run unit Tests' "$workflow_head" \
-        'Check code quality' "$workflow_head" publish-images "$workflow_head")
+      expected=$(printf 'CI|%s|%s|success\n' \
+        'Build Gate' "$workflow_head" \
+        'Live Bootstrap Producer' "$workflow_head")
       ;;
     resolve-image)
       arguments=("$upstream_sha")
