@@ -76,6 +76,22 @@ any cross-repository mutation. Duplicate days, attempted SHAs, malformed or
 ambiguous observations, and every failed stage retain an honest `FAILED`
 receipt.
 
+An open consumer repin is the one expected non-launch outcome on the changed
+path. It records `stage=complete`, `outcome=AWAITING`, and
+`run_outcome=awaiting-integration`, exits zero, and prints
+`AWAITING <day> <upstream-sha> <consumer-pr-url>`. This classification applies
+only when the integration operation reports that the PR is awaiting guarded
+integration. A merged PR whose head differs from the verified candidate, or
+whose merge commit is not exact current `main`, remains a hard failure with its
+specific diagnostic.
+
+The controller counts the current day plus uninterrupted preceding UTC days
+whose durable receipt on issue #210 is terminal AWAITING for the same upstream
+SHA. More than `DAILY_AMARU_AWAITING_MAX_DAYS` consecutive days fails at
+`stage=supervised-integration`; the default is 3, so the fourth consecutive day
+is loud. A missing day breaks the sequence, and unrelated candidates or
+non-AWAITING receipts do not contribute.
+
 ## Supervised changed path
 
 The provisional transport:
@@ -88,8 +104,10 @@ The provisional transport:
 4. requires the named workflow/job results on the exact consumer head and
    retains the positive, non-zero output from
    `scripts/check-amaru-producer-image-refs.sh`;
-5. waits for lane-supervised guarded integration and verifies the merge is
-   exact current `main`—the transport has no generated-PR self-merge command;
+5. checks lane-supervised guarded integration once; an open PR records the
+   bounded AWAITING outcome, while a merged PR must have the verified candidate
+   head and be exact current `main`—the transport has no generated-PR
+   self-merge command;
 6. invokes `cardano-node.yaml` once with `test=cardano_amaru`, `duration=1`,
    and `no-faults=false`, then waits for the run result before recording the
    upstream SHA as successful.

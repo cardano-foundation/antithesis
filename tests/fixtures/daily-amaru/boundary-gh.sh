@@ -5,6 +5,9 @@ log_file=${DAILY_AMARU_BOUNDARY_GH_LOG:?DAILY_AMARU_BOUNDARY_GH_LOG is required}
 comments_file=${DAILY_AMARU_BOUNDARY_COMMENTS:?DAILY_AMARU_BOUNDARY_COMMENTS is required}
 head_sha=${DAILY_AMARU_BOUNDARY_HEAD_SHA:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
 integrated_sha=${DAILY_AMARU_BOUNDARY_INTEGRATED_SHA:-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb}
+pr_state=${DAILY_AMARU_BOUNDARY_PR_STATE:-MERGED}
+pr_head_sha=${DAILY_AMARU_BOUNDARY_PR_HEAD_SHA:-$head_sha}
+main_sha=${DAILY_AMARU_BOUNDARY_MAIN_SHA:-$integrated_sha}
 
 {
   printf 'gh'
@@ -53,8 +56,13 @@ case "${1:-} ${2:-}" in
       printf 'https://example.invalid/%s/pull/existing\n' "$5"
     elif [ "$#" -eq 7 ] && [ "$4" = -R ] && [ "$6" = --json ] &&
       [ "$7" = state,headRefOid,mergeCommit ]; then
-      printf '{"state":"MERGED","headRefOid":"%s","mergeCommit":{"oid":"%s"}}\n' \
-        "$head_sha" "$integrated_sha"
+      if [ "$pr_state" = MERGED ]; then
+        printf '{"state":"%s","headRefOid":"%s","mergeCommit":{"oid":"%s"}}\n' \
+          "$pr_state" "$pr_head_sha" "$integrated_sha"
+      else
+        printf '{"state":"%s","headRefOid":"%s","mergeCommit":null}\n' \
+          "$pr_state" "$pr_head_sha"
+      fi
     else
       exit 64
     fi
@@ -108,7 +116,7 @@ case "${1:-} ${2:-}" in
       printf ']}\n'
     elif [ "$#" -eq 4 ] && [[ "$2" == repos/*/git/ref/heads/main ]] &&
       [ "$3" = --jq ] && [ "$4" = .object.sha ]; then
-      printf '%s\n' "$integrated_sha"
+      printf '%s\n' "$main_sha"
     else
       exit 64
     fi

@@ -364,10 +364,36 @@ receipt[producer_count]=$producer_count
 receipt[producer_evidence]=$producer_evidence
 write_receipt producer-check VERIFIED
 
-integrated_sha=''
-if ! integrated_sha=$(transport_call await-supervised-integration "$consumer_sha"); then
+integration_output=''
+integration_rc=0
+integration_output=$(transport_call await-supervised-integration "$consumer_sha") ||
+  integration_rc=$?
+if [ "$integration_rc" -ne 0 ]; then
+  if [ "$integration_rc" -eq 75 ] &&
+    [[ "$integration_output" =~ ^AWAITING\ (https://[^[:space:]]+)$ ]]; then
+    consumer_pr_url=${BASH_REMATCH[1]}
+    awaiting_max_days=${DAILY_AMARU_AWAITING_MAX_DAYS:-3}
+    [[ "$awaiting_max_days" =~ ^[0-9]+$ ]] ||
+      fail_stage supervised-integration malformed-awaiting-max-days
+    awaiting_age=''
+    if ! awaiting_age=$(transport_call awaiting-integration-age "$observed_sha" "$day"); then
+      fail_stage supervised-integration awaiting-age-census-failed
+    fi
+    [[ "$awaiting_age" =~ ^[1-9][0-9]*$ ]] ||
+      fail_stage supervised-integration malformed-awaiting-age
+    if [ "$awaiting_age" -gt "$awaiting_max_days" ]; then
+      fail_stage supervised-integration "awaiting-integration-stale-${awaiting_age}-days"
+    fi
+    write_receipt complete AWAITING run_outcome=awaiting-integration
+    printf 'AWAITING %s %s %s\n' "$day" "$observed_sha" "$consumer_pr_url"
+    exit 0
+  fi
+  if [ "$integration_rc" -eq 75 ]; then
+    fail_stage supervised-integration malformed-awaiting-status
+  fi
   fail_stage supervised-integration not-integrated
 fi
+integrated_sha=$integration_output
 [[ "$integrated_sha" =~ ^[0-9a-f]{40}$ ]] ||
   fail_stage supervised-integration malformed-integrated-sha
 receipt[consumer_integrated_sha]=$integrated_sha

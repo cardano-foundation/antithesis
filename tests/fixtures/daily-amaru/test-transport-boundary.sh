@@ -575,6 +575,10 @@ execute_value_operation() {
       printf '<!-- daily-amaru last-success sha=%s -->\n' "$upstream_sha" >"$comments"
       expected=$upstream_sha
       ;;
+    awaiting-integration-age)
+      arguments=("$upstream_sha" "$day")
+      expected=1
+      ;;
     propose-bootstrap) arguments=("$upstream_sha") ;;
     require-bootstrap-checks)
       arguments=("$workflow_head")
@@ -651,7 +655,7 @@ assert_value_census() {
   local operation
   local -a dispatched_operations executed_operations
   for operation in preflight claim-day resolve-upstream last-success-sha \
-    claim-sha-attempt claim-launch propose-bootstrap require-bootstrap-checks \
+    awaiting-integration-age claim-sha-attempt claim-launch propose-bootstrap require-bootstrap-checks \
     resolve-image prepare-consumer-repin require-consumer-checks run-producer-check \
     await-supervised-integration fake-launch real-launch; do
     execute_value_operation "$operation"
@@ -671,6 +675,85 @@ assert_value_census() {
     "$fake_gh" api repos/example/unsupported >"$stdout" 2>"$stderr"; then
     fail 'boundary-gh accepted an API endpoint outside the real CLI surface'
   fi
+}
+
+write_awaiting_receipt() {
+  local receipt_day=$1 sha=$2 outcome=${3:-AWAITING}
+  printf '%s\n' \
+    '<!-- daily-amaru receipt -->' \
+    "- day=$receipt_day" \
+    '- stage=complete' \
+    "- outcome=$outcome" \
+    "- upstream_sha=$sha" \
+    '- run_outcome=awaiting-integration' >>"$comments"
+}
+
+assert_awaiting_age_from_receipts() {
+  local rc=0
+  prepare_case awaiting-age
+  write_awaiting_receipt 2026-08-16 "$upstream_sha"
+  write_awaiting_receipt 2026-08-17 "$upstream_sha"
+  write_awaiting_receipt 2026-08-18 "$upstream_sha"
+  write_awaiting_receipt 2026-08-18 "$foreign_sha"
+  write_awaiting_receipt 2026-08-15 "$upstream_sha" CHANGED
+  DAILY_AMARU_STATE_DIR="$state" \
+    DAILY_AMARU_BOUNDARY_GH_LOG="$effects" \
+    DAILY_AMARU_BOUNDARY_COMMENTS="$comments" \
+    run_boundary_command "$bin" "$transport" awaiting-integration-age \
+      "$upstream_sha" "$day" >"$stdout" 2>"$stderr" || rc=$?
+  [ "$rc" -eq 0 ] || fail "awaiting age census failed: $(tr '\n' ' ' <"$stderr")"
+  [ "$(<"$stdout")" = 4 ] ||
+    fail "awaiting age did not count three consecutive durable days plus today"
+
+  prepare_case awaiting-age-gap
+  write_awaiting_receipt 2026-08-16 "$upstream_sha"
+  write_awaiting_receipt 2026-08-18 "$upstream_sha"
+  rc=0
+  DAILY_AMARU_STATE_DIR="$state" \
+    DAILY_AMARU_BOUNDARY_GH_LOG="$effects" \
+    DAILY_AMARU_BOUNDARY_COMMENTS="$comments" \
+    run_boundary_command "$bin" "$transport" awaiting-integration-age \
+      "$upstream_sha" "$day" >"$stdout" 2>"$stderr" || rc=$?
+  [ "$rc" -eq 0 ] || fail "awaiting gap census failed: $(tr '\n' ' ' <"$stderr")"
+  [ "$(<"$stdout")" = 2 ] || fail 'awaiting age crossed a missing receipt day'
+  printf 'AWAITING-AGE durable_days=3 age=4 gap_age=2 source=receipt-stream\n'
+}
+
+assert_integration_outcome_classification() {
+  local label state_value pr_head main_head expected_rc expected_diagnostic rc
+  local expected_stdout
+  while IFS='|' read -r label state_value pr_head main_head expected_rc expected_diagnostic; do
+    prepare_case "integration-$label"
+    printf 'https://example.invalid/pull/1\n' >"$state/consumer-pr"
+    rc=0
+    DAILY_AMARU_IDENTITY=boundary-bootstrap-token \
+      GH_TOKEN=boundary-repository-token \
+      DAILY_AMARU_STATE_DIR="$state" \
+      DAILY_AMARU_BOUNDARY_GH_LOG="$effects" \
+      DAILY_AMARU_BOUNDARY_COMMENTS="$comments" \
+      DAILY_AMARU_BOUNDARY_PR_STATE="$state_value" \
+      DAILY_AMARU_BOUNDARY_PR_HEAD_SHA="$pr_head" \
+      DAILY_AMARU_BOUNDARY_INTEGRATED_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+      DAILY_AMARU_BOUNDARY_MAIN_SHA="$main_head" \
+      run_boundary_command "$bin" "$transport" await-supervised-integration \
+        "$workflow_head" >"$stdout" 2>"$stderr" || rc=$?
+    [ "$rc" -eq "$expected_rc" ] ||
+      fail "integration $label exit=$rc, expected $expected_rc: $(tr '\n' ' ' <"$stderr")"
+    grep -Fq "$expected_diagnostic" "$stderr" ||
+      fail "integration $label lacked its own diagnostic"
+    if [ "$label" = awaiting ]; then
+      expected_stdout='AWAITING https://example.invalid/pull/1'
+      [ "$(<"$stdout")" = "$expected_stdout" ] ||
+        fail 'awaiting integration did not emit the typed PR URL status'
+    elif [ -s "$stdout" ]; then
+      fail "integration fault $label emitted a benign value"
+    fi
+  done <<EOF
+awaiting|OPEN|$workflow_head|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|75|consumer repin is awaiting guarded integration
+head-mismatch|MERGED|$foreign_sha|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|1|integrated PR head differs from the verified candidate
+not-exact-main|MERGED|$workflow_head|$foreign_sha|1|merged consumer commit is not exact current main
+EOF
+  printf 'INTEGRATION-CLASSIFICATION awaiting=exit-75 faults=2 hard-failures=2\n'
 }
 
 assert_receipt_schema() {
@@ -1279,6 +1362,8 @@ case "$scenario" in
     assert_foreign
     assert_fresh
     assert_value_census
+    assert_awaiting_age_from_receipts
+    assert_integration_outcome_classification
     assert_value_mutants
     assert_receipt_schema
     assert_mutants

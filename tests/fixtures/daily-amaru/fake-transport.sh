@@ -278,7 +278,33 @@ case "$operation" in
   await-supervised-integration)
     head=${1:?consumer head is required}
     log await-supervised-integration "$head"
-    printf '%s\n' "$integrated_sha"
+    case "$scenario" in
+      awaiting-integration | awaiting-integration-threshold | awaiting-integration-stale)
+        printf 'daily-amaru-github: consumer repin is awaiting guarded integration\n' >&2
+        printf 'AWAITING https://example.invalid/pull/17\n'
+        exit 75
+        ;;
+      integration-head-mismatch)
+        printf 'daily-amaru-github: integrated PR head differs from the verified candidate\n' >&2
+        exit 1
+        ;;
+      integration-not-exact-main)
+        printf 'daily-amaru-github: merged consumer commit is not exact current main\n' >&2
+        exit 1
+        ;;
+      *) printf '%s\n' "$integrated_sha" ;;
+    esac
+    ;;
+
+  awaiting-integration-age)
+    sha=${1:?upstream SHA is required}
+    day=${2:?day is required}
+    log awaiting-integration-age "$sha" "$day"
+    case "$scenario" in
+      awaiting-integration-threshold) printf '3\n' ;;
+      awaiting-integration-stale) printf '4\n' ;;
+      *) printf '1\n' ;;
+    esac
     ;;
 
   fake-launch)
