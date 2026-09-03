@@ -31,4 +31,3 @@ image used by the bounded command probe. No credentials or publication effects.
 
 Changed responsibility: state the producer release matrix and ring labels that
 M236-1 actually renders. It contains no independent release-selection rule.
-

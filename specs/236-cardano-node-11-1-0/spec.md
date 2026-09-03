@@ -63,4 +63,3 @@ and test duration are forbidden.
 - `docker compose ... config` succeeds and exposes the exact producer set.
 - The anonymous live-image boundary for 11.1.0 succeeds.
 - `nix develop --quiet -c just ci` passes on the final tree.
-

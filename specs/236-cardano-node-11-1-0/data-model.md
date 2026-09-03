@@ -34,4 +34,3 @@ The changed tracked paths may contain the master Compose image rotation,
 matching documentation, the focused proof and minimal test-runner wiring, and
 the ticket planning artifacts. No other testnet or workflow state belongs to
 this change.
-

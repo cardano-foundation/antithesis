@@ -61,4 +61,3 @@ independent review, so LIGHT is not eligible.
 Stop before modifying any non-master testnet, relay image, topology, command,
 mount, workload, fault policy, or Antithesis workflow; introducing credentials;
 publishing images; or launching an Antithesis test.
-

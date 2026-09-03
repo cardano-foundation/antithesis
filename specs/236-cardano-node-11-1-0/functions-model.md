@@ -22,5 +22,4 @@ No production function or public command changes.
   boundary; non-zero otherwise.
 - Effects: anonymous registry reads and local image cache only.
 - Constraint: no credential access, tag mutation, image publication, or
-  long-running node/testnet startup.
-
+long-running node/testnet startup.
