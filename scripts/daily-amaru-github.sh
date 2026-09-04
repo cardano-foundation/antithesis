@@ -306,9 +306,9 @@ classify_bootstrap_check() {
 observe_bootstrap_checks() {
   local candidate=$1
   local identity=$2
-  local checks duration start now deadline cadence remaining
+  local checks duration start now deadline cadence remaining window
   local polls=0 rows status name
-  local first_incomplete='' first_failed='' last_boundary=''
+  local first_absent='' first_pending='' first_failed='' last_boundary=''
   local ever_valid=0 last_transport=0 all_success
   local -a required=()
 
@@ -322,7 +322,8 @@ observe_bootstrap_checks() {
   while true; do
     polls=$((polls + 1))
     last_transport=0
-    first_incomplete=''
+    first_absent=''
+    first_pending=''
     first_failed=''
     all_success=1
     if rows=$(collect_action_rows "$bootstrap_repository" "$candidate" \
@@ -339,8 +340,10 @@ observe_bootstrap_checks() {
             ;;
           absent | pending)
             all_success=0
-            if [ -z "$first_incomplete" ]; then
-              first_incomplete=$name
+            if [ "$status" = absent ]; then
+              [ -n "$first_absent" ] || first_absent=$name
+            else
+              [ -n "$first_pending" ] || first_pending=$name
             fi
             ;;
           *)
@@ -364,18 +367,31 @@ observe_bootstrap_checks() {
     fi
 
     if [ -z "${deadline:-}" ]; then
+      # The deadline is the absolute ceiling, never a statistic over past
+      # runs. The nightly's own bump is the one run nobody pre-builds into
+      # cachix, so completed-run durations structurally exclude the case they
+      # would bound: nightly 33837021124 derived ~402s of history while the
+      # build it watched ran 1269s and was still executing when this observer
+      # declared it never-reported. History only chooses how often the census
+      # is taken; only a conclusion, a genuine absence, or the ceiling ends
+      # the wait. Absent history is not fatal: the cadence falls back to the
+      # poll ceiling and the window to the absolute ceiling.
+      window=$(bootstrap_observation_ceiling)
       duration=$(bootstrap_observation_duration "$bootstrap_repository" \
-        "$identity") ||
-        die "bootstrap check duration evidence is unusable on $candidate: no completed '$bootstrap_check_workflow' run in $bootstrap_repository within the observation ceiling"
-      deadline=$((start + duration))
-      if [ "$duration" -le 1 ]; then
-        cadence=1
+        "$identity") || duration=''
+      deadline=$((start + window))
+      if [[ "$duration" =~ ^[1-9][0-9]*$ ]]; then
+        if [ "$duration" -le 1 ]; then
+          cadence=1
+        else
+          cadence=$((duration / 2))
+        fi
       else
-        cadence=$((duration / 2))
+        cadence=$poll_ceiling
       fi
       # Half of a long window is a poll rate that can miss a check reporting
-      # and completing between two observations. The window stays evidence-
-      # derived; only how often it is looked at is bounded.
+      # and completing between two observations. Only how often the window is
+      # looked at is bounded.
       if [ "$cadence" -gt "$poll_ceiling" ]; then
         cadence=$poll_ceiling
       fi
@@ -386,7 +402,10 @@ observe_bootstrap_checks() {
       if [ "$last_transport" -eq 1 ] || [ "$ever_valid" -eq 0 ]; then
         die "bootstrap check transport-exhausted on $candidate polls=$polls boundary=${last_boundary:-unnamed}"
       fi
-      die "bootstrap check never-reported on $candidate: ${first_incomplete:-${required[0]}} polls=$polls observed=$(observed_check_surface "$candidate" "$rows")"
+      if [ -n "$first_pending" ]; then
+        die "bootstrap check still-running on $candidate: $first_pending polls=$polls observed=$(observed_check_surface "$candidate" "$rows") ceiling=$window: the required check is still executing past the absolute observation ceiling, so the ceiling itself is wrong and must be raised (DAILY_AMARU_BOOTSTRAP_CHECK_MAX_SECONDS) before the next nightly"
+      fi
+      die "bootstrap check never-reported on $candidate: ${first_absent:-${required[0]}} polls=$polls observed=$(observed_check_surface "$candidate" "$rows")"
     fi
     remaining=$((deadline - now))
     if [ "$remaining" -gt "$cadence" ]; then
