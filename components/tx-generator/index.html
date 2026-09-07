@@ -1,0 +1,1571 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://cardano-foundation.github.io/cardano-node-antithesis/components/tx-generator/">
+      
+      
+        <link rel="prev" href="../asteria-player/">
+      
+      
+        <link rel="next" href="../../testnets/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.0">
+    
+    
+      
+        <title>Tx-generator - Cardano Node assets for Antithesis</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.618322db.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../css/terminal-player.css">
+    
+      <link rel="stylesheet" href="../../css/asciinema-player.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#tx-generator" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Cardano Node assets for Antithesis" class="md-header__button md-logo" aria-label="Cardano Node assets for Antithesis" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Cardano Node assets for Antithesis
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Tx-generator
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/cardano-foundation/cardano-node-antithesis" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Cardano Node assets for Antithesis" class="md-nav__button md-logo" aria-label="Cardano Node assets for Antithesis" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Cardano Node assets for Antithesis
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/cardano-foundation/cardano-node-antithesis" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Components
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Components
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tracer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tracer-sidecar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracer-sidecar
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sidecar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sidecar
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configurator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configurator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adversary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adversary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adversary-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adversary roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../asteria-player/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Asteria Game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tx-generator
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tx-generator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#role" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Role
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Image
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#topology-inside-the-container" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Topology inside the container
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wire-protocol-control-socket" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wire protocol — control socket
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-request-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-request flow
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Per-request flow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#transact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        transact
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#refill" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        refill
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reconnect-resilience" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reconnect resilience
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#composer-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Composer scripts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#persistent-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Persistent state
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failure-modes-assertions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Failure modes &amp; assertions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-evidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation evidence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#source" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Source
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../testnets/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testnets
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Testnets
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testnets/cardano-node-master/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cardano Node Master
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-run overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../triage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Triage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../query-logs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Querying logs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+  
+
+
+  <nav class="md-path" aria-label="Navigation" >
+    <ol class="md-path__list">
+      
+        
+  
+  
+    <li class="md-path__item">
+      <a href="../.." class="md-path__link">
+        
+  <span class="md-ellipsis">
+    Home
+  </span>
+
+      </a>
+    </li>
+  
+
+      
+      
+        
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="../tracer/" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    Components
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ol>
+  </nav>
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="tx-generator">Tx-generator</h1>
+<p>Long-running, externally-triggered fan-out daemon that drives
+deterministic UTxO and address pressure on a Cardano cluster, designed
+for Antithesis. Replaces the original Python tx-generator
+(<a href="https://github.com/cardano-foundation/cardano-node-antithesis/issues/69">cardano-foundation/cardano-node-antithesis#69</a>)
+which queried the relay's local-state-query channel on every submission
+and self-drained UTxOs to dust.</p>
+<h2 id="role">Role</h2>
+<p>The daemon owns a master seed and grows a population of HD-derived
+addresses monotonically across the run. Each composer tick fires one
+<em>request</em> (transact or refill); the daemon performs <strong>exactly one</strong>
+transaction using the request's seed as its only source of randomness.
+Without an external trigger, the daemon is idle.</p>
+<p>This shape is the contract:</p>
+<ul>
+<li><strong>Composer is the clock.</strong> No internal pacing, no internal RNG, no
+  timer-driven submission.</li>
+<li><strong>Determinism.</strong> Given identical persistent state and identical
+  request payload, the daemon's behaviour is bit-identical: same
+  source picked, same destinations picked, same per-output values,
+  same submitted transaction id. This is what makes Antithesis
+  replays reproducible.</li>
+<li><strong>Population grows monotonically.</strong> Per <code>transact</code> request, with
+  probability <code>prob_fresh</code> per output slot a new HD address is
+  derived; otherwise an existing population member is sampled.
+  Net effect per transaction: population grows by <code>K · prob_fresh</code>
+  on average, total UTxO count grows by K, mean UTxO value drifts
+  toward the Conway minUtxo floor.</li>
+</ul>
+<h2 id="image">Image</h2>
+<p><code>ghcr.io/cardano-foundation/cardano-node-antithesis/tx-generator:&lt;commit&gt;</code></p>
+<p>The compose tag is a <em>downstream</em> commit SHA — <code>publish-images.sh</code>
+clones <code>cardano-node-antithesis</code>, checks out that commit, and builds
+the docker image from <code>components/tx-generator/</code> at that point. The
+upstream daemon source is pinned via Nix in
+<code>components/tx-generator/flake.nix</code> (<code>github:lambdasistemi/cardano-node-clients/&lt;sha&gt;</code>).</p>
+<h2 id="configuration">Configuration</h2>
+<p>CLI args (translated by <code>entrypoint.sh</code> into the daemon binary):</p>
+<table>
+<thead>
+<tr>
+<th>flag</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--relay-socket</code></td>
+<td>Path to the cardano-node N2C socket (one socket, one connection).</td>
+</tr>
+<tr>
+<td><code>--control-socket</code></td>
+<td>Path of the NDJSON Unix socket the daemon will create and listen on.</td>
+</tr>
+<tr>
+<td><code>--state-dir</code></td>
+<td>On-disk persistent state: <code>master.seed</code> (32 B) + <code>nextHDIndex</code>.</td>
+</tr>
+<tr>
+<td><code>--master-seed-file</code></td>
+<td>Optional override; otherwise generated on first boot.</td>
+</tr>
+<tr>
+<td><code>--faucet-skey-file</code></td>
+<td>Faucet signing key. <code>entrypoint.sh</code> accepts a TextEnvelope JSON and rewrites it to the raw 32-byte seed the daemon expects.</td>
+</tr>
+<tr>
+<td><code>--network-magic</code></td>
+<td>Network magic (42 on this testnet).</td>
+</tr>
+</tbody>
+</table>
+<p>Composer-side environment:</p>
+<table>
+<thead>
+<tr>
+<th>var</th>
+<th>meaning</th>
+<th>default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TX_GEN_FANOUT</code></td>
+<td>K — number of explicit destinations per transact tx</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>TX_GEN_PROB_FRESH</code></td>
+<td>Probability each destination slot is a freshly-derived address</td>
+<td>0.5</td>
+</tr>
+<tr>
+<td><code>CONTROL_SOCKET</code></td>
+<td>Path to the daemon's control socket</td>
+<td><code>/state/tx-generator-control.sock</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="topology-inside-the-container">Topology inside the container</h2>
+<p>The daemon opens <strong>exactly one</strong> N2C connection to the relay it's
+configured against and multiplexes every Ouroboros mini-protocol over
+that single bearer:</p>
+<ul>
+<li>ChainSync — feeds the in-process address-to-UTxO indexer.</li>
+<li>LocalStateQuery — <code>GetUTxOByTxIn</code> for the pre-submit chain-tip probe.</li>
+<li>LocalTxSubmission — submits the built tx.</li>
+</ul>
+<p>The address-to-UTxO indexer is the in-tree
+<a href="https://github.com/lambdasistemi/cardano-node-clients/tree/main/lib/Cardano/Node/Client/UTxOIndexer"><code>cardano-node-clients</code> indexer library</a>
+embedded in-process; the daemon does NOT query the relay's LSQ for
+per-address UTxOs (that was the bug the original Python generator hit).</p>
+<h2 id="wire-protocol-control-socket">Wire protocol — control socket</h2>
+<p>NDJSON over Unix socket. One request per line, one response per line.
+Schema (canonical):
+<a href="https://github.com/lambdasistemi/cardano-node-clients/blob/main/specs/034-cardano-tx-generator/contracts/control-wire.md"><code>specs/034-cardano-tx-generator/contracts/control-wire.md</code></a>.</p>
+<p>Request kinds:</p>
+<ul>
+<li><code>{"transact":{"seed":&lt;u64&gt;,"fanout":&lt;int&gt;,"prob_fresh":&lt;float&gt;}}</code> —
+  build and submit one transaction.</li>
+<li><code>{"refill":{"seed":&lt;u64&gt;}}</code> — bootstrap or top-up: pull from the
+  faucet into a freshly-derived population address.</li>
+<li><code>{"snapshot":null}</code> — read-only: returns population size, percentile
+  cuts of the UTxO value distribution, current tip slot, and
+  <code>lastTxId</code>. Used by <code>eventually_population_grew.sh</code> and
+  <code>eventually_pressure_summary.sh</code>.</li>
+<li><code>{"ready":null}</code> — read-only: returns indexer-ready and
+  faucet-known flags.</li>
+</ul>
+<p>Response shape per arm uses one of:</p>
+<ul>
+<li><code>Ok</code> (success).</li>
+<li><code>IndexNotReady</code> (transient — composer retries on next tick).</li>
+<li><code>NoPickableSource</code> (transact-only, no population member has a
+  viable UTxO — refill arm should fire first).</li>
+<li><code>SubmitRejected</code> (hard failure — surfaces as the
+  <code>tx_generator_*_submit_rejected</code> Always assertion).</li>
+</ul>
+<h2 id="per-request-flow">Per-request flow</h2>
+<h3 id="transact"><code>transact</code></h3>
+<ol>
+<li>Sample a source address uniformly from the existing population
+   using the request's seed.</li>
+<li>Query the in-process indexer for that address's UTxOs. Apply the
+   K-output viability floor; if no source meets it, retry up to N
+   times with the same RNG stream and on cap respond
+   <code>NoPickableSource</code>.</li>
+<li>For each of K output slots: with probability <code>prob_fresh</code> derive
+   a new HD address and use it as destination; otherwise sample an
+   existing population member.</li>
+<li>Build the tx (one input from the picked source; K outputs at
+   randomly-drawn values within the viable range; one change output
+   back to the source).</li>
+<li><strong>Pre-submit probe</strong>: <code>GetUTxOByTxIn</code> on the picked input via LSQ
+   against the chain tip. If the relay no longer sees that input as
+   unspent (e.g. mid-rollback) → <code>IndexNotReady</code>.</li>
+<li>Submit via LocalTxSubmission.</li>
+<li><strong>Post-submit recovery</strong>:<ul>
+<li><code>Submitted txId</code> → await the change-output on the indexer with
+  bounded timeout; respond <code>Ok</code> with <code>awaited:bool</code>.</li>
+<li><code>Rejected "already been included"</code> → the deterministic txId
+  may have been accepted on a prior submit (think bearer close
+  mid-submit, or a rolled-back fork on which the daemon submitted
+  earlier). Await the change-output. On observation: <code>Ok</code>. On
+  timeout: <code>IndexNotReady</code> (transient — composer retries; on the
+  next tick the rebuilt tx will spend a different post-rollback
+  input and submit cleanly).</li>
+<li><code>ConnectionLost</code> (bearer died mid-submit) is caught at the
+  outer arm seam and surfaces as <code>IndexNotReady</code>.</li>
+</ul>
+</li>
+</ol>
+<h3 id="refill"><code>refill</code></h3>
+<p>Same five-step shape as transact, with three differences:</p>
+<ul>
+<li>Source is the <em>faucet</em> address.</li>
+<li>Destination is <strong>always</strong> a freshly-derived population address.</li>
+<li>Recovery branch handles both <code>ConnectionLost</code> and "already-included"
+  rejections (refills always reuse the same faucet input across
+  retries, so duplicate-submit recovery is structurally required).</li>
+</ul>
+<h2 id="reconnect-resilience">Reconnect resilience</h2>
+<p>The daemon survives every fault Antithesis injects without dying. The
+machinery (upstream PRs):</p>
+<ul>
+<li><strong>#105</strong> — <code>runReconnectLoop</code> supervisor with exponential-backoff
+  retry, plus <code>BlockedIndefinitelyOnSTM → ConnectionLost</code> catch in
+  <code>submitTxN2C</code> and <code>queryLSQ</code> so the GHC RTS deadlock detector can't
+  tear the daemon down on a bearer close.</li>
+<li><strong>#110</strong> — post-reconnect indexer freshness gate. After a reconnect
+  the daemon refuses to query/submit until ChainSync has seen its
+  first fresh block on the new bearer.</li>
+<li><strong>#114</strong> — pre-submit chain-tip probe (<code>GetUTxOByTxIn</code>) to catch
+  the simple "input already spent" case before bothering the relay.</li>
+<li><strong>#115</strong> — post-submit duplicate-submit recovery on the refill arm
+  (await the change-output on <code>ConnectionLost</code> or "already-included"
+  rejection).</li>
+<li><strong>#116</strong> — recovery-await timeout aligned to
+  <code>dcAwaitTimeoutSeconds</code> (30s) — same window the happy path has.</li>
+<li><strong>#117</strong> — recovery-await <em>timeout</em> on the refill arm classified as
+  <code>IndexNotReady</code> rather than <code>SubmitRejected</code>. The carrying block
+  was almost certainly rolled back; the next tick will rebuild
+  against the post-rollback faucet input.</li>
+<li><strong>#118</strong> — same recovery shape applied to the transact arm.</li>
+</ul>
+<h2 id="composer-scripts">Composer scripts</h2>
+<p>In <code>components/tx-generator/composer/tx-generator/</code>:</p>
+<table>
+<thead>
+<tr>
+<th>script</th>
+<th>role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>parallel_driver_transact.sh</code></td>
+<td>Fires one <code>transact</code> request per tick.</td>
+</tr>
+<tr>
+<td><code>parallel_driver_refill.sh</code></td>
+<td>Fires one <code>refill</code> request per tick (lower composer weight than transact).</td>
+</tr>
+<tr>
+<td><code>eventually_population_grew.sh</code></td>
+<td>Snapshots populationSize and asserts <code>Sometimes</code> it has grown. Gated on <code>lastTxId</code> being non-null so the assertion never fires before any tx has been attempted.</td>
+</tr>
+<tr>
+<td><code>eventually_pressure_summary.sh</code></td>
+<td>Post-workload pressure summary (population size + UTxO value percentiles + tip slot).</td>
+</tr>
+<tr>
+<td><code>helper_sdk_lib.sh</code></td>
+<td>Shared SDK helpers: <code>sdk_reachable</code>, <code>sdk_sometimes</code>, <code>sdk_unreachable</code>. All scripts source this.</td>
+</tr>
+</tbody>
+</table>
+<p>All composer scripts use <code>set -u</code> (NOT <code>set -e</code>) and <strong>always exit 0</strong>.
+Antithesis's built-in <em>Commands finish with zero exit code</em> property
+has no opt-out, and the daemon's control socket isn't bound during
+early boot — <code>nc -U</code> against an unbound socket returns non-zero, and
+<code>set -e</code> would kill the script before any exit-0 path runs. Tick state
+is encoded purely via SDK assertions.</p>
+<h2 id="persistent-state">Persistent state</h2>
+<p>In <code>--state-dir</code> (default <code>/state/txgen</code>):</p>
+<ul>
+<li><code>master.seed</code> — 32-byte raw seed. Set on first boot from
+  <code>--master-seed-file</code> (or freshly generated if absent). Never
+  rewritten.</li>
+<li><code>nextHDIndex</code> — single integer. Bumped on each successful transact
+  / refill that derived a fresh address. <strong>Only written on
+  successful submission paths</strong> (including recovery-await observation);
+  on <code>IndexNotReady</code> / <code>SubmitRejected</code> the index is preserved so the
+  next request rebuilds against the same state.</li>
+</ul>
+<p>Crash-restart is idempotent: the daemon reads <code>master.seed</code> +
+<code>nextHDIndex</code>, replays HD derivation, and resumes.</p>
+<h2 id="failure-modes-assertions">Failure modes &amp; assertions</h2>
+<p>The composer assertions surface two classes of finding:</p>
+<ol>
+<li>
+<p><strong>Hard failures</strong> — Always-style: should never fire.</p>
+<ul>
+<li><code>tx_generator_refill_submit_rejected</code></li>
+<li><code>tx_generator_transact_submit_rejected</code></li>
+</ul>
+<p>These mean the relay rejected a deterministically-built submission
+with something other than the recoverable
+"already been included" — i.e. genuine ledger / fee / size error.</p>
+</li>
+<li>
+<p><strong>Reachability</strong> — informational:</p>
+<ul>
+<li><code>tx_generator_*_driver_started</code></li>
+<li><code>tx_generator_*_landed</code></li>
+<li><code>tx_generator_*_not_applicable</code> (e.g. <code>NoPickableSource</code>)</li>
+<li><code>tx_generator_*_daemon_unreachable</code> (early-boot, control socket
+  not yet bound)</li>
+<li><code>tx_generator_population_grew</code> (Sometimes — gated)</li>
+<li><code>tx_generator_pressure_summary</code> (Reachability at run-end)</li>
+</ul>
+</li>
+</ol>
+<h2 id="validation-evidence">Validation evidence</h2>
+<p>The tx-generator image promoted to
+<a href="../../testnets/cardano-node-master/"><code>cardano_node_master</code></a> is
+<code>tx-generator:69bf815</code>, referenced from downstream commit <code>4687a09</code>.
+It was validated on a dedicated <code>cardano_node_tx_generator</code> testnet
+before promotion (since removed; the workload now lives directly in
+<code>cardano_node_master</code>).</p>
+<table>
+<thead>
+<tr>
+<th>Evidence</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Antithesis test run</td>
+<td><code>9352ad089c67523bc2ba2c14d1d18b5b39b24f49797c640214eaf375abf74944</code></td>
+</tr>
+<tr>
+<td>Triage report id</td>
+<td><code>OSIShLbA8Ixh6uRxqDdjWdtr</code></td>
+</tr>
+<tr>
+<td>GitHub workflow</td>
+<td><code>25377129832</code></td>
+</tr>
+<tr>
+<td>Started</td>
+<td><code>2026-05-05 12:48 UTC</code></td>
+</tr>
+<tr>
+<td>Requested duration</td>
+<td><code>60m</code></td>
+</tr>
+<tr>
+<td>Reported wall clock</td>
+<td><code>1h 7m</code></td>
+</tr>
+<tr>
+<td>Reported test hours</td>
+<td><code>48h 0m</code></td>
+</tr>
+<tr>
+<td>Properties</td>
+<td><code>40/40</code> passed</td>
+</tr>
+<tr>
+<td>Findings</td>
+<td><code>0 new</code>, <code>0 ongoing</code>, <code>0 resolved</code>, <code>0 rare</code></td>
+</tr>
+</tbody>
+</table>
+<p>The validation run used the same shared image set as the adjacent
+<code>cardano_node_master</code> run <code>8ca5bdd583...</code> from <code>2026-05-05 12:42 UTC</code>:
+the same <code>configurator</code>, <code>log-tailer</code>, <code>sidecar</code>, <code>tracer-sidecar</code>,
+<code>cardano-node</code>, and <code>cardano-tracer</code> images. The expected differences
+were that the tx-generator run added <code>tx-generator:69bf815</code>, while the
+master run included <code>asteria-game:f7ce4a2</code>.</p>
+<p>The four previous composer zero-exit findings were all cleared:</p>
+<table>
+<thead>
+<tr>
+<th>Composer command</th>
+<th>Passing hits</th>
+<th>Failing hits</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tx-generator/parallel_driver_transact.sh</code></td>
+<td><code>5,288</code></td>
+<td><code>0</code></td>
+</tr>
+<tr>
+<td><code>tx-generator/parallel_driver_refill.sh</code></td>
+<td><code>3,506</code></td>
+<td><code>0</code></td>
+</tr>
+<tr>
+<td><code>tx-generator/eventually_population_grew.sh</code></td>
+<td><code>1,448</code></td>
+<td><code>0</code></td>
+</tr>
+<tr>
+<td><code>tx-generator/finally_pressure_summary.sh</code></td>
+<td><code>413</code></td>
+<td><code>0</code></td>
+</tr>
+</tbody>
+</table>
+<p>Measured workload pressure in that run:</p>
+<table>
+<thead>
+<tr>
+<th>Measurement</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>parallel_driver_transact.sh</code> starts</td>
+<td><code>5,709</code></td>
+</tr>
+<tr>
+<td><code>parallel_driver_refill.sh</code> starts</td>
+<td><code>4,597</code></td>
+</tr>
+<tr>
+<td><code>eventually_population_grew.sh</code> starts</td>
+<td><code>1,412</code></td>
+</tr>
+<tr>
+<td><code>finally_pressure_summary.sh</code> starts</td>
+<td><code>413</code></td>
+</tr>
+<tr>
+<td>Max commands running concurrently</td>
+<td><code>12</code></td>
+</tr>
+<tr>
+<td>Total virtual hours</td>
+<td><code>335.301</code></td>
+</tr>
+<tr>
+<td>Virtual seconds per input</td>
+<td><code>0.743665</code></td>
+</tr>
+<tr>
+<td><code>tx_generator_population_grew</code> hits</td>
+<td><code>166</code></td>
+</tr>
+<tr>
+<td><code>tx_generator_refill_landed</code> hits</td>
+<td><code>43</code></td>
+</tr>
+</tbody>
+</table>
+<p>The <code>tx_generator_pressure_summary</code> property passed with <code>413</code> hits and
+<code>0</code> failing. The report exposes one exemplar snapshot:</p>
+<pre><code class="language-json">{
+  &quot;lastTxId&quot;: null,
+  &quot;p10_lovelace&quot;: null,
+  &quot;p50_lovelace&quot;: null,
+  &quot;p90_lovelace&quot;: null,
+  &quot;populationSize&quot;: 0,
+  &quot;tipSlot&quot;: 61
+}
+</code></pre>
+<p>That exemplar is a point-in-time SDK example selected by Antithesis;
+the workload properties above show that population growth and refill
+landing were observed elsewhere in the same run.</p>
+<h2 id="source">Source</h2>
+<ul>
+<li>Daemon: <a href="https://github.com/lambdasistemi/cardano-node-clients">https://github.com/lambdasistemi/cardano-node-clients</a>
+  (package <code>cardano-tx-generator</code>, library <code>lib/Cardano/Node/Client/TxGenerator/</code>).</li>
+<li>Container scaffold: <code>components/tx-generator/</code>.</li>
+<li>Composer scripts: <code>components/tx-generator/composer/tx-generator/</code>.</li>
+<li>Wire schema (canonical):
+  <a href="https://github.com/lambdasistemi/cardano-node-clients/blob/main/specs/034-cardano-tx-generator/contracts/control-wire.md">https://github.com/lambdasistemi/cardano-node-clients/blob/main/specs/034-cardano-tx-generator/contracts/control-wire.md</a>.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.indexes", "toc.integrate", "content.code.copy", "navigation.path"], "search": "../../assets/javascripts/workers/search.7a47a382.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.e71a0d61.min.js"></script>
+      
+        <script src="../../js/asciinema-player.min.js"></script>
+      
+    
+  </body>
+</html>

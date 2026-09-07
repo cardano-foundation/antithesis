@@ -1,0 +1,1373 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://cardano-foundation.github.io/cardano-node-antithesis/components/adversary/">
+      
+      
+        <link rel="prev" href="../config/">
+      
+      
+        <link rel="next" href="../adversary-roadmap/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.0">
+    
+    
+      
+        <title>Adversary - Cardano Node assets for Antithesis</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.618322db.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../css/terminal-player.css">
+    
+      <link rel="stylesheet" href="../../css/asciinema-player.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#adversary" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Cardano Node assets for Antithesis" class="md-header__button md-logo" aria-label="Cardano Node assets for Antithesis" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Cardano Node assets for Antithesis
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Adversary
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/cardano-foundation/cardano-node-antithesis" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Cardano Node assets for Antithesis" class="md-nav__button md-logo" aria-label="Cardano Node assets for Antithesis" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Cardano Node assets for Antithesis
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/cardano-foundation/cardano-node-antithesis" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Components
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Components
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tracer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tracer-sidecar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracer-sidecar
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sidecar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sidecar
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configurator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configurator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adversary
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adversary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shape
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-one-tick-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What one tick does
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-exercises" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it exercises
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-does-not-exercise" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it does not exercise
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#composer-driver" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Composer driver
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wiring-on-cardano_node_adversary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wiring on cardano_node_adversary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#build-the-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build the image
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#local-test-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local test loop
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#source-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Source layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-a-cli-per-tick-and-not-a-daemon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why a CLI per tick (and not a daemon)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adversary-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adversary roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../asteria-player/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Asteria Game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tx-generator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tx-generator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../testnets/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testnets
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Testnets
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testnets/cardano-node-master/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cardano Node Master
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-run overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../triage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Triage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../query-logs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Querying logs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+  
+
+
+  <nav class="md-path" aria-label="Navigation" >
+    <ol class="md-path__list">
+      
+        
+  
+  
+    <li class="md-path__item">
+      <a href="../.." class="md-path__link">
+        
+  <span class="md-ellipsis">
+    Home
+  </span>
+
+      </a>
+    </li>
+  
+
+      
+      
+        
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="../tracer/" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    Components
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ol>
+  </nav>
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="adversary">Adversary</h1>
+<p>A node-to-node downstream client that connects to a randomly-chosen
+node in the cluster, asks for a chain sync from a randomly-chosen
+intersection point, pulls a bounded number of headers, and disconnects.
+The Antithesis composer fires it repeatedly under fault injection so
+nodes see concurrent connection churn while their chain is being
+rolled back, paused, or partitioned.</p>
+<h2 id="shape">Shape</h2>
+<p>The component ships:</p>
+<ul>
+<li>a single Haskell binary <code>cardano-adversary</code> (built from
+  <a href="https://github.com/cardano-foundation/cardano-node-antithesis/tree/main/components/adversary"><code>components/adversary/</code></a>),</li>
+<li>a sleep-forever Docker image that bakes the binary plus its driver
+  scripts under <code>/opt/antithesis/test/v1/chain-sync-client/</code>,</li>
+<li>a single composer driver <code>parallel_driver_flap.sh</code>.</li>
+</ul>
+<p>The container itself does <strong>no work</strong> — it is a host the Antithesis
+composer <code>docker exec</code>s into per tick. Everything stateful is
+ephemeral inside the per-tick process; nothing lives across ticks.</p>
+<pre><code>                           +--------------------------------+
+                           |   adversary container          |
+                           |   (sleep -f /dev/null)         |
+                           |                                |
+   Antithesis composer ---&gt;|   /opt/antithesis/test/v1/     |
+   docker exec per tick    |     chain-sync-client/         |
+                           |       parallel_driver_flap.sh  |
+                           |   /bin/cardano-adversary       |
+                           |                                |
+                           +--------------------------------+
+                                       |
+                                       | initiator-only
+                                       | NodeToNodeV_14
+                                       v
+                           +--------------------------------+
+                           |  one of:                       |
+                           |    p1, p2, p3 (producers)      |
+                           |    relay1, relay2 (relays)     |
+                           |  picked uniformly from --seed  |
+                           +--------------------------------+
+</code></pre>
+<h2 id="what-one-tick-does">What one tick does</h2>
+<ol>
+<li>The composer dispatches <code>parallel_driver_flap.sh</code> inside the
+   adversary container.</li>
+<li>The shell reads a 64-bit seed from <code>antithesis_random</code> (or
+   <code>/dev/urandom</code> outside the Antithesis runtime) and execs
+   <code>cardano-adversary</code> with the seed and the candidate target list.</li>
+<li>The binary splits the seed, picks <strong>one</strong> target host uniformly
+   from <code>--target-host</code> and <strong>one</strong> chain point uniformly from
+   <code>--chain-points-file</code>.</li>
+<li>It opens a single initiator-only N2N session against that host,
+   sends <code>MsgFindIntersect [point]</code>, then loops <code>MsgRequestNext</code>
+   until <code>--limit</code> headers are received or the producer's tip is
+   reached.</li>
+<li>It disconnects and exits 0.</li>
+</ol>
+<p>Antithesis's chaos can SIGKILL the container at any point; <code>restart:
+always</code> brings it back, and the next tick's exec is independent.
+Mid-tick connection drops to nodes are an expected byproduct of
+fault injection — they are not a bug in the adversary.</p>
+<h2 id="what-it-exercises">What it exercises</h2>
+<ul>
+<li>Each node's mux + connection-management code under churning
+  initiator-only N2N peers.</li>
+<li>The intersection-finding logic, with both well-known and
+  rolled-back points.</li>
+<li>ChainSync server state machine on every node — producers and
+  relays alike speak the same protocol.</li>
+</ul>
+<h2 id="what-it-does-not-exercise">What it does not exercise</h2>
+<ul>
+<li>Block-fetch, tx-submission, keep-alive, or handshake mini-protocols
+  (each is a candidate for its own future archetype, not yet
+  implemented).</li>
+<li>Upstream-peer (server) behaviour — the adversary never serves a
+  chain. That requires a topology change tracked separately
+  (see <a href="https://github.com/cardano-foundation/cardano-node-antithesis/issues/91">#91</a>).</li>
+<li>Mid-protocol misbehaviour (malformed messages, stalled requests,
+  out-of-order responses). Today the loop only sends well-formed
+  requests.</li>
+</ul>
+<h2 id="cli">CLI</h2>
+<pre><code class="language-text">Usage: cardano-adversary --network-magic INT (--target-host HOST)
+                         [--target-port PORT] --chain-points-file PATH
+                         --seed HEX-OR-DEC [-l|--limit N]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--network-magic INT</code></td>
+<td>(required)</td>
+<td>Network magic of the target cluster (e.g. 42).</td>
+</tr>
+<tr>
+<td><code>--target-host HOST</code></td>
+<td>(required, repeatable)</td>
+<td>One candidate target. Pass multiple times; one is picked uniformly per invocation.</td>
+</tr>
+<tr>
+<td><code>--target-port PORT</code></td>
+<td><code>3001</code></td>
+<td>N2N port on every <code>--target-host</code>.</td>
+</tr>
+<tr>
+<td><code>--chain-points-file PATH</code></td>
+<td>(required)</td>
+<td>Path to a <code>tracer-sidecar</code> chainpoints file. One <code>&lt;hash&gt;@&lt;slot&gt;</code> per line, plus the implicit <code>origin</code> point.</td>
+</tr>
+<tr>
+<td><code>--seed HEX-OR-DEC</code></td>
+<td>(required)</td>
+<td>PRNG seed driving both target-host and chain-point pick. Source from <code>$(antithesis_random)</code> in the driver.</td>
+</tr>
+<tr>
+<td><code>--limit N</code></td>
+<td><code>100</code></td>
+<td>Stop after syncing N headers.</td>
+</tr>
+</tbody>
+</table>
+<p>The seed routes both random choices, so when Antithesis seeds the
+driver shell deterministically, the entire run is replayable.</p>
+<h2 id="composer-driver">Composer driver</h2>
+<p>Single driver: <a href="https://github.com/cardano-foundation/cardano-node-antithesis/blob/main/components/adversary/composer/chain-sync-client/parallel_driver_flap.sh"><code>components/adversary/composer/chain-sync-client/parallel_driver_flap.sh</code></a>.</p>
+<pre><code class="language-bash">SEED=$(antithesis_random 2&gt;/dev/null \
+    || od -An -tx8 -N8 /dev/urandom | tr -d ' \n')
+
+exec cardano-adversary \
+    --network-magic 42 \
+    --target-host p1.example \
+    --target-host p2.example \
+    --target-host p3.example \
+    --target-host relay1.example \
+    --target-host relay2.example \
+    --target-port 3001 \
+    --chain-points-file /tracer/chainPoints.log \
+    --seed &quot;0x${SEED}&quot; \
+    --limit 100
+</code></pre>
+<p>Targeting policy is in this file, not in the binary or some default
+buried in Haskell. To restrict an experiment to producers only,
+delete the two <code>relay*.example</code> lines. To attack only one node,
+delete the others. The list lives next to the network magic and the
+port — one place describes the attack target.</p>
+<h2 id="wiring-on-cardano_node_adversary">Wiring on <code>cardano_node_adversary</code></h2>
+<p>The adversary runs as its own service in
+<a href="https://github.com/cardano-foundation/cardano-node-antithesis/blob/main/testnets/cardano_node_adversary/docker-compose.yaml"><code>testnets/cardano_node_adversary/docker-compose.yaml</code></a>:</p>
+<pre><code class="language-yaml">adversary:
+  image: ghcr.io/cardano-foundation/cardano-node-antithesis/adversary:69f49c5
+  hostname: adversary.example
+  volumes:
+    - tracer:/tracer:ro       # tracer-sidecar writes chainPoints.log here
+  depends_on:
+    tracer-sidecar:
+      condition: service_started
+    configurator:
+      condition: service_completed_successfully
+  restart: always
+</code></pre>
+<p>No <code>command:</code> override — the image's <code>EntryPoint</code> is <code>tail -f
+/dev/null</code>. No socket volume. No shared state with anyone else. The
+only mount is <code>tracer:/tracer:ro</code> so the binary can read
+<code>/tracer/chainPoints.log</code>.</p>
+<h2 id="build-the-image">Build the image</h2>
+<p>The image is published by the
+<a href="https://github.com/cardano-foundation/cardano-node-antithesis/blob/main/.github/workflows/publish-images.yaml"><code>publish-images</code></a> workflow on every PR-to-main and
+push-to-main, scoped to whatever tag the consuming compose pins. The
+script is content-addressed: only tags that are not already in GHCR
+get rebuilt.</p>
+<p>Local build for development:</p>
+<pre><code class="language-bash">cd components/adversary
+nix build .#docker-image
+docker load &lt; ./result
+</code></pre>
+<h2 id="local-test-loop">Local test loop</h2>
+<p>Bring up the testnet, then exec the driver inside the adversary
+container:</p>
+<pre><code class="language-bash">INTERNAL_NETWORK=true scripts/smoke-test.sh cardano_node_adversary 600
+</code></pre>
+<p>The smoke-test:</p>
+<ol>
+<li>Starts the compose project.</li>
+<li>Pings p1/p2/p3 via <code>cardano-cli ping</code>.</li>
+<li>Runs the sidecar's <code>convergence/eventually_converged.sh</code>.</li>
+<li>Execs <code>parallel_driver_flap.sh</code> inside the adversary container
+   once; the binary should pick a target, sync 100 headers, and
+   exit 0.</li>
+</ol>
+<p>A green run logs:</p>
+<pre><code>OK: p1 — host: 127.0.0.1:3001, …
+OK: p2 — host: 127.0.0.1:3001, …
+OK: p3 — host: 127.0.0.1:3001, …
+Checking sidecar convergence command…
+Probing adversary driver…
+cardano-adversary: target=relay2.example point=origin limit=100 seed=…
+cardano-adversary: completed; reached At (Block {blockPointSlot = SlotNo 38, …})
+OK: adversary driver
+PASS: all 3 nodes responding
+</code></pre>
+<h2 id="source-layout">Source layout</h2>
+<pre><code>components/adversary/
+├── adversary.cabal
+├── app/Main.hs                          — CLI parsing (optparse-applicative),
+│                                          seeded random pick of host + point,
+│                                          single adversaryApplication call
+├── src/Adversary.hs                     — chain-point parser, pickOne helper
+├── src/Adversary/Application.hs         — chain-sync state machine,
+│                                          adversaryApplication
+├── src/Adversary/ChainSync/
+│   ├── Codec.hs                         — codec for Header/Point/Tip
+│   └── Connection.hs                    — connectToNode + Ouroboros wiring
+├── composer/chain-sync-client/
+│   └── parallel_driver_flap.sh
+├── nix/
+│   ├── project.nix                      — haskell.nix project
+│   └── docker-image.nix                 — sleep-forever image with binary +
+│                                          baked driver scripts
+├── test/AdversarySpec.hs                — chain-point + pickOne unit tests
+├── flake.nix
+└── Dockerfile
+</code></pre>
+<h2 id="why-a-cli-per-tick-and-not-a-daemon">Why a CLI per tick (and not a daemon)</h2>
+<p>A previous iteration shipped a long-running daemon (NDJSON over a
+UNIX socket, one request per tick, lifted into
+<a href="https://github.com/lambdasistemi/cardano-node-clients"><code>lambdasistemi/cardano-node-clients</code></a>). Diagnosis after a
+regression on <code>cardano_node_master</code> showed three structural problems:</p>
+<ol>
+<li><strong>Two schedulers behind one socket.</strong> The Antithesis composer is
+   itself a scheduler; the daemon's accept loop was a second. Neither
+   was observable from the other.</li>
+<li><strong>Targeting bias was emergent.</strong> <code>cycle peerNames</code> × the driver's
+   <code>NCONNS=1</code> default funnelled 100 % of attacks at p1; the other
+   producers and the relays were never touched. p1 fell behind, the
+   convergence sidecar reported <code>tips_divergent</code>, the cluster looked
+   broken on every run.</li>
+<li><strong>Lifecycle complexity for no benefit.</strong> The adversary is
+   <em>stateless per tick</em> — every <code>chain_sync_flap</code> request opened
+   fresh sockets, ran to completion, and threw the chain TVar away.
+   Nothing was carried across ticks. A daemon adds a chaos target, a
+   second restart loop, and an <code>IOException</code>-on-SIGTERM class, while
+   sharing nothing useful between requests.</li>
+</ol>
+<p>The current CLI-per-tick model:</p>
+<ul>
+<li>has <em>one</em> scheduler — the Antithesis composer;</li>
+<li>writes the targeting policy in the driver shell, where it is
+  visible to anyone listing the directory;</li>
+<li>spawns one short-lived process per tick; mid-tick chaos kill is
+  indistinguishable from clean tick exit.</li>
+</ul>
+<p>The full diagnosis (logs, evidence, regression timeline) is in the
+PR that did the redesign: <a href="https://github.com/cardano-foundation/cardano-node-antithesis/pull/110">#110</a>. The companion deletion in
+the daemon's home repo: <a href="https://github.com/lambdasistemi/cardano-node-clients/pull/122"><code>cardano-node-clients</code> PR #122</a>.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="../adversary-roadmap/">Adversary roadmap</a> — what's next: more
+  archetypes, each as its own CLI under this component.</li>
+<li><a href="https://github.com/cardano-foundation/cardano-node-antithesis/issues/91">#91</a> — Tier 3 epic: adversary as N2N <strong>server</strong>
+  (Byzantine upstream peer). Different testnet variant; not part of
+  this component yet.</li>
+<li><a href="https://ouroboros-network.cardano.intersectmbo.org/pdfs/network-spec/network-spec.pdf">Network spec PDF</a> — chain-sync mini-protocol on p. 21.</li>
+<li><a href="https://github.com/IntersectMBO/ouroboros-network">ouroboros-network</a> — the upstream library we depend on.</li>
+<li>Other projects by <a href="https://github.com/cardano-foundation/hal">HAL</a></li>
+<li>Other projects by the <a href="https://github.com/cardano-foundation">Cardano Foundation</a></li>
+<li>About <a href="https://cardano.org/">Cardano</a></li>
+</ul>
+<!-- MARKDOWN LINKS & IMAGES -->
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.indexes", "toc.integrate", "content.code.copy", "navigation.path"], "search": "../../assets/javascripts/workers/search.7a47a382.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.e71a0d61.min.js"></script>
+      
+        <script src="../../js/asciinema-player.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,1299 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://cardano-foundation.github.io/cardano-node-antithesis/components/asteria-player/">
+      
+      
+        <link rel="prev" href="../adversary-roadmap/">
+      
+      
+        <link rel="next" href="../tx-generator/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.0">
+    
+    
+      
+        <title>Asteria Game - Cardano Node assets for Antithesis</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.618322db.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../css/terminal-player.css">
+    
+      <link rel="stylesheet" href="../../css/asciinema-player.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#asteria-game" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Cardano Node assets for Antithesis" class="md-header__button md-logo" aria-label="Cardano Node assets for Antithesis" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Cardano Node assets for Antithesis
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Asteria Game
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/cardano-foundation/cardano-node-antithesis" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Cardano Node assets for Antithesis" class="md-nav__button md-logo" aria-label="Cardano Node assets for Antithesis" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Cardano Node assets for Antithesis
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/cardano-foundation/cardano-node-antithesis" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Components
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Components
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tracer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tracer-sidecar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracer-sidecar
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sidecar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sidecar
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configurator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configurator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adversary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adversary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adversary-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adversary roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Asteria Game
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Asteria Game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#adding-asteria-game-to-a-testnet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding asteria-game to a testnet
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Adding asteria-game to a testnet">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pre-requisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pre-requisites
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#compose-block" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compose block
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validation-gate-before-merging-into-a-scheduled-testnet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation gate before merging into a scheduled testnet
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-does-the-cluster-need-to-look-like" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What does the cluster need to look like
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it does
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#assertions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assertions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#build-the-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build the image
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Build the image">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nix
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-locally" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run locally
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tx-generator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tx-generator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../testnets/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testnets
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Testnets
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testnets/cardano-node-master/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cardano Node Master
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-run overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../triage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Triage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../query-logs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Querying logs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+  
+
+
+  <nav class="md-path" aria-label="Navigation" >
+    <ol class="md-path__list">
+      
+        
+  
+  
+    <li class="md-path__item">
+      <a href="../.." class="md-path__link">
+        
+  <span class="md-ellipsis">
+    Home
+  </span>
+
+      </a>
+    </li>
+  
+
+      
+      
+        
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="../tracer/" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    Components
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ol>
+  </nav>
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="asteria-game">Asteria Game</h1>
+<p>Single workload container that plays the <a href="https://github.com/txpipe/asteria">asteria</a> game inside
+the cardano-node-antithesis cluster. It drives realistic transaction
+traffic - script spends, minting policies, reference scripts, validity
+bounds, inline datums - so Antithesis can explore node behavior under
+real ledger pressure instead of only empty-block production.</p>
+<p>This component is part of the phase-1 gatherer feature (<a href="https://github.com/cardano-foundation/cardano-node-antithesis/issues/56">#56</a>).</p>
+<h2 id="adding-asteria-game-to-a-testnet">Adding asteria-game to a testnet</h2>
+<p>Drop the asteria-game container into any testnet's
+<code>docker-compose.yaml</code> to give Antithesis a real workload generator on
+top of an idle Cardano cluster. The container bundles a long-lived
+utxo-indexer plus three short-lived binaries fired by composer
+scripts (bootstrap, player, invariant) — see
+<a href="../../testnets/cardano-node-master/#why-asteria-game-is-here">the why-it's-here section in the master testnet doc</a>
+for the rationale.</p>
+<h3 id="pre-requisites">Pre-requisites</h3>
+<p>The host testnet must already have:</p>
+<ul>
+<li>A relay that block producers connect to, e.g. <code>relay1</code>, with a
+  named volume mounted at <code>/state</code> so the asteria-game container
+  can read its node socket. The master testnet uses
+  <code>relay1-state:/state</code>.</li>
+<li>A <code>utxo-keys</code> named volume populated by the configurator with
+  the genesis wallet skeys (the bootstrap binary needs them to
+  sign the deploy tx).</li>
+<li>A network magic of <code>42</code>. Other magics are not currently wired —
+  <code>NETWORK_MAGIC</code> is hard-coded in the player's compose env.</li>
+</ul>
+<h3 id="compose-block">Compose block</h3>
+<p>Add this service block under <code>services:</code> at the bottom of your
+<code>docker-compose.yaml</code>:</p>
+<pre><code class="language-yaml">  asteria-game:
+    image: ghcr.io/cardano-foundation/cardano-node-antithesis/asteria-game:&lt;tag&gt;
+    container_name: asteria-game
+    hostname: asteria-game.example
+    environment:
+      INDEXER_SOCK: /tmp/idx.sock
+      CARDANO_NODE_SOCKET_PATH: /state/node.socket
+      NETWORK_MAGIC: &quot;42&quot;
+    volumes:
+      - relay1-state:/state:ro            # read-only N2C socket
+      - utxo-keys:/utxo-keys:ro           # genesis skeys for bootstrap
+      - asteria-game-db:/idx-db           # RocksDB persistence
+      - asteria-deploy:/asteria-deploy    # per-deploy seed TxIn
+    tmpfs:
+      - /tmp                              # holds /tmp/idx.sock
+    depends_on:
+      relay1:
+        condition: service_started
+</code></pre>
+<p>Then declare the two new named volumes under the top-level
+<code>volumes:</code> block:</p>
+<pre><code class="language-yaml">volumes:
+  # … existing volumes …
+  asteria-game-db:
+  asteria-deploy:
+</code></pre>
+<p><code>&lt;tag&gt;</code> is a 7-char short SHA from a commit on this repo. The
+<code>publish-images</code> workflow rebuilds the image and pushes
+<code>asteria-game:&lt;short-sha&gt;</code> whenever a commit touches
+<code>components/asteria-game/</code>. Pick the tag from any green
+<code>publish-images</code> run on <code>main</code>, or use the digest pinned by master
+in <a href="https://github.com/cardano-foundation/cardano-node-antithesis/blob/main/testnets/cardano_node_master/docker-compose.yaml"><code>testnets/cardano_node_master/docker-compose.yaml</code></a>.</p>
+<p>The composer scripts that drive the binaries are baked into the
+image at build time at <code>/opt/antithesis/test/v1/asteria-game/</code> - nothing extra
+to mount. The Antithesis composer mounts that path into its execution
+sandbox automatically when the test runs.</p>
+<h3 id="validation-gate-before-merging-into-a-scheduled-testnet">Validation gate before merging into a scheduled testnet</h3>
+<p>Per the project's "no broken container on main testnet" rule, a
+new testnet that adds asteria-game must dispatch a 1h Antithesis
+run via <code>workflow_dispatch</code> on the feature branch and confirm
+<code>findings_new ≤ baseline</code> before merging. The same gate applied
+when promoting asteria-game into <a href="https://github.com/cardano-foundation/cardano-node-antithesis/pull/128"><code>cardano_node_master</code></a>.</p>
+<h3 id="what-does-the-cluster-need-to-look-like">What does the cluster need to look like</h3>
+<p>The asteria-game player drives <code>spawnShip</code> Plutus transactions
+that consume + replace the asteria UTxO. The cluster needs:</p>
+<ul>
+<li>At least one block producer that accepts valid Plutus v3
+  transactions (the asteria validators are Aiken-compiled to
+  PlutusV3).</li>
+<li>A relay reachable via <code>relay1.example:3001</code> (N2N) and
+  <code>relay1-state:/state/node.socket</code> (N2C). Aliasing it under a
+  different name requires editing
+  <code>components/asteria-game/composer/asteria-game/parallel_driver_asteria_player.sh</code>.</li>
+<li>Genesis funds in <code>utxo-keys/genesis.1.skey</code> sufficient for the
+  one-time bootstrap deploy plus a few thousand <code>spawnShip</code>
+  transactions over a 3h run.</li>
+</ul>
+<p>The master testnet meets all three by construction. New testnets
+that change the topology, network magic, or genesis layout will
+need to mirror those choices.</p>
+<h2 id="what-it-does">What it does</h2>
+<p>The container entrypoint is a long-lived <code>utxo-indexer</code> connected to
+<code>relay1</code> via N2C. The image also ships three short-lived binaries that
+the Antithesis composer fires as commands:</p>
+<ul>
+<li><strong><code>asteria-bootstrap</code></strong> - serial, idempotent deploy. Picks or reuses
+  a deploy seed UTxO, parameter-applies the validators to that seed,
+  mints the one-shot <code>asteriaAdmin</code> NFT, and locks the initial
+  <code>AsteriaDatum</code> at the asteria spend address. Re-running is safe:
+  once the asteria UTxO exists, bootstrap observes it and skips the
+  mint path.</li>
+<li><strong><code>asteria-game</code></strong> - parallel workload pass. Reads the asteria UTxO
+  through the indexer, plans a move for one of three logical players,
+  and today lets player 1 build, sign, and submit a <code>spawnShip</code> Plutus
+  transaction. The binary exits after one pass; composer provides the
+  repetition and concurrency.</li>
+<li><strong><code>asteria-invariant</code></strong> - one-shot oracle. Depending on
+  <code>ASTERIA_INVARIANT</code>, checks either the <code>asteriaAdmin</code> singleton or
+  end-of-run state consistency between the asteria <code>ship_counter</code> and
+  the <code>SHIP*</code> tokens at the spacetime address.</li>
+</ul>
+<p>Composer scripts under <code>/opt/antithesis/test/v1/asteria-game/</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>serial_driver_asteria_bootstrap.sh</code></td>
+<td>Exclusive bootstrap/deploy command.</td>
+</tr>
+<tr>
+<td><code>parallel_driver_asteria_player.sh</code></td>
+<td>Concurrent workload command; one observe/spawn pass.</td>
+</tr>
+<tr>
+<td><code>parallel_driver_heartbeat.sh</code></td>
+<td>Indexer readiness probe during the run.</td>
+</tr>
+<tr>
+<td><code>anytime_asteria_admin_singleton.sh</code></td>
+<td>Periodic singleton invariant.</td>
+</tr>
+<tr>
+<td><code>eventually_alive.sh</code></td>
+<td>Post-fault indexer liveness probe.</td>
+</tr>
+<tr>
+<td><code>eventually_asteria_consistency.sh</code></td>
+<td>Post-workload game-state consistency snapshot.</td>
+</tr>
+<tr>
+<td><code>helper_sdk.sh</code></td>
+<td>Shared shell SDK emitter and signal-safe wrapper.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="assertions">Assertions</h2>
+<p>Asteria contributes both workload and oracles:</p>
+<ul>
+<li><code>asteria_bootstrap_asteria_created</code> / <code>asteria_bootstrap_already_deployed</code>
+  prove deployment either happened or was observed.</li>
+<li><code>asteria_player_ship_spawned_1</code> proves real Plutus spawn
+  transactions landed.</li>
+<li><code>asteria_admin_singleton</code> is an <code>Always</code> property: exactly one
+  <code>asteriaAdmin</code> NFT exists at the asteria spend address.</li>
+<li><code>asteria_state_consistent</code> is a <code>Sometimes</code> property comparing
+  <code>ship_counter</code> to <code>SHIP*</code> token count.</li>
+<li><code>asteria_game eventually_alive holds</code> proves the long-lived indexer
+  is responsive and close to the chain tip.</li>
+</ul>
+<h2 id="build-the-image">Build the image</h2>
+<h3 id="nix">Nix</h3>
+<pre><code class="language-bash">cd components/asteria-game
+nix build .#docker-image
+docker load &lt; result
+version=$(nix eval --raw .#version)
+docker tag \
+    ghcr.io/cardano-foundation/cardano-node-antithesis/asteria-game:$version \
+    ghcr.io/cardano-foundation/cardano-node-antithesis/asteria-game:dev
+</code></pre>
+<p><code>just load-docker-image</code> wraps the same steps.</p>
+<h2 id="run-locally">Run locally</h2>
+<pre><code class="language-bash">INTERNAL_NETWORK=false docker compose \
+    -f testnets/cardano_node_master/docker-compose.yaml up -d
+</code></pre>
+<p>The compose file declares one <code>asteria-game</code> service. Its main process
+is the indexer; the Antithesis composer invokes the baked-in scripts
+inside that container during a test run.</p>
+<p>For a local container smoke:</p>
+<pre><code class="language-bash">just logs asteria-game
+docker compose -f testnets/cardano_node_master/docker-compose.yaml \
+    exec asteria-game /bin/asteria-bootstrap
+docker compose -f testnets/cardano_node_master/docker-compose.yaml \
+    exec asteria-game /bin/asteria-game
+</code></pre>
+<h2 id="see-also">See Also</h2>
+<ul>
+<li>License: see LICENSE</li>
+<li>Contributing: see CONTRIBUTING.md</li>
+<li>Other projects by <a href="https://github.com/cardano-foundation/hal">HAL</a></li>
+<li>Other projects by the <a href="https://github.com/cardano-foundation">Cardano Foundation</a></li>
+<li>About <a href="https://cardano.org/">Cardano</a></li>
+</ul>
+<!-- MARKDOWN LINKS & IMAGES -->
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.indexes", "toc.integrate", "content.code.copy", "navigation.path"], "search": "../../assets/javascripts/workers/search.7a47a382.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.e71a0d61.min.js"></script>
+      
+        <script src="../../js/asciinema-player.min.js"></script>
+      
+    
+  </body>
+</html>
