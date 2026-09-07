@@ -948,6 +948,187 @@ guard_site_census() {
   ' "$1"
 }
 
+# ---------------------------------------------------------------------------
+# S-UH-01: a deliberate, correct no-op must not be indistinguishable from a
+# failure. Night 1 exits 0 green having recorded no success sha (AWAITING);
+# night 2, same upstream sha and same controller head, must not be refused by
+# the unchanged-head guard. The asymmetry control is a separate executed row:
+# after a FAILED attempt the guard's red stays. The mutant row reverts the fix
+# and must redden the first pair. The extent row covers every exit-0 outcome
+# discovered in the controller source, never a listed pair.
+no_op_night() {
+  local label=$1 comments_file=$2 night_day=$3 night_state=$4 night_pr_state=$5
+  local fail_resolver=${6-}
+  no_op_bin="$tmp_root/$label-bin"
+  mkdir -p "$no_op_bin" "$night_state"
+  seed_boundary_path "$no_op_bin"
+  no_op_effects="$tmp_root/$label-effects"
+  no_op_stdout="$tmp_root/$label-stdout"
+  no_op_stderr="$tmp_root/$label-stderr"
+  no_op_receipt="$night_state/receipt"
+  receipt=$no_op_receipt
+  : >"$no_op_effects"
+  if [ -n "$fail_resolver" ]; then
+    export DAILY_AMARU_BOUNDARY_RESOLVER_FAIL=$fail_resolver
+  fi
+  no_op_rc=0
+  GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0="url.file://$no_op_upstream_remote.insteadOf" \
+    GIT_CONFIG_VALUE_0=https://github.com/pragma-org/amaru.git \
+    GIT_CONFIG_NOSYSTEM=1 \
+    GIT_CONFIG_GLOBAL=/dev/null \
+    DAILY_AMARU_MODE=production \
+    DAILY_AMARU_DAY="$night_day" \
+    DAILY_AMARU_HEAD="$workflow_head" \
+    DAILY_AMARU_IDENTITY=boundary-bootstrap-token \
+    GH_TOKEN=boundary-repository-token \
+    DAILY_AMARU_STATE_DIR="$night_state" \
+    DAILY_AMARU_RECEIPT="$no_op_receipt" \
+    DAILY_AMARU_BOUNDARY_GH_LOG="$no_op_effects" \
+    DAILY_AMARU_BOUNDARY_COMMENTS="$comments_file" \
+    DAILY_AMARU_BOUNDARY_BOOTSTRAP_REMOTE="$no_op_bootstrap_remote" \
+    DAILY_AMARU_BOUNDARY_REPOSITORY_REMOTE="$no_op_consumer_remote" \
+    DAILY_AMARU_BOUNDARY_RESOLVER_LOG="$tmp_root/$label-resolver.log" \
+    DAILY_AMARU_BOUNDARY_NIX_LOG="$tmp_root/$label-nix.log" \
+    DAILY_AMARU_BOUNDARY_SELECTED_CONFIGS_REV="$selected_configs_sha" \
+    DAILY_AMARU_BOUNDARY_PR_STATE="$night_pr_state" \
+    DAILY_AMARU_TRANSPORT="$no_op_transport" \
+    run_boundary_command "$no_op_bin" "$controller" \
+    >"$no_op_stdout" 2>"$no_op_stderr" || no_op_rc=$?
+  unset DAILY_AMARU_BOUNDARY_RESOLVER_FAIL
+}
+
+assert_unchanged_head_no_op() {
+  local observed discovered csv
+  # Every night of this scenario gets its own UTC day: the remotes are shared
+  # across pairs, and a reused day would meet branches already pushed by an
+  # earlier night instead of exercising the flow under proof.
+  local day_green_1=2026-09-01 day_green_2=2026-09-02 day_mutant=2026-09-08
+  local day_red_1=2026-09-03 day_red_2=2026-09-04
+  local day_changed_1=2026-09-05 day_changed_2=2026-09-06
+  local day_unchanged_1=2026-09-07 day_unchanged_2=2026-09-09
+  local -a covered=()
+  local comments
+  no_op_transport=$transport
+  no_op_upstream_remote=$(create_remote no-op-upstream)
+  no_op_bootstrap_remote=$(create_remote no-op-bootstrap)
+  no_op_consumer_remote=$(create_consumer_remote no-op-consumer)
+  observed=$(git --git-dir="$no_op_upstream_remote" rev-parse refs/heads/main)
+
+  # ROW A — the two-night sequence. Night 1 exits 0 green (AWAITING) and the
+  # record it leaves names no success sha; night 2, same sha and same head,
+  # must not be refused by the unchanged-head guard.
+  comments="$tmp_root/no-op-comments-green"
+  : >"$comments"
+  no_op_night no-op-green-n1 "$comments" "$day_green_1" "$tmp_root/no-op-green-n1-state" OPEN
+  [ "$no_op_rc" -eq 0 ] ||
+    fail "no-op night 1 did not exit 0 green: $(tr '\n' ' ' <"$no_op_stderr")"
+  grep -Fq -- '- stage=complete' "$comments" ||
+    fail 'no-op night 1 published no complete receipt'
+  grep -Fq -- '- outcome=AWAITING' "$comments" ||
+    fail 'no-op night 1 outcome is not AWAITING'
+  grep -Fq -- "- upstream_sha=$observed" "$comments" ||
+    fail 'no-op night 1 receipt lacks upstream_sha'
+  grep -Fq -- "- workflow_head=$workflow_head" "$comments" ||
+    fail 'no-op night 1 receipt lacks workflow_head'
+  if grep -Fq 'last-success sha=' "$comments"; then
+    fail 'no-op night 1 recorded a success sha; this is not the defective sequence'
+  fi
+  grep -Fq "attempted-sha=$observed head=$workflow_head" "$comments" ||
+    fail 'no-op night 1 left no attempt marker at the frozen head'
+  no_op_night no-op-green-n2 "$comments" "$day_green_2" "$tmp_root/no-op-green-n2-state" OPEN
+  [ "$no_op_rc" -eq 0 ] ||
+    fail "CHECK-NO-OP-AFTER-GREEN violated: night 2 died on the unchanged no-op: $(tr '\n' ' ' <"$no_op_stderr")"
+  ! grep -Fq 'unchanged-head' "$no_op_stderr" ||
+    fail 'night 2 was refused by the unchanged-head guard'
+  [ "$(grep -c -- '- outcome=AWAITING' "$comments")" -eq 2 ] ||
+    fail 'no-op night 2 did not publish its own AWAITING receipt'
+  covered+=(AWAITING)
+  printf 'CHECK-NO-OP-AFTER-GREEN nights=2 night1=AWAITING night2=AWAITING sha_recorded_by_night1=none\n'
+
+  # ROW C — self-falsification. Reverting the fix (the guard assumes failure
+  # again) must redden the row-A night 2 against the same durable record.
+  mutant="$tmp_root/no-op-guard-mutant.sh"
+  sed 's/if ! attempt_completed "\$kind" "\$value" "\$head" "\$census"; then/if ! false; then # mutant: guard assumes failure again/' \
+    "$transport" >"$mutant"
+  grep -Fq '# mutant: guard assumes failure again' "$mutant" ||
+    fail 'guard mutation did not apply'
+  bash -n "$mutant" || fail 'guard mutant is not valid shell'
+  chmod +x "$mutant"
+  no_op_transport=$mutant
+  no_op_night no-op-mutant-n2 "$comments" "$day_mutant" "$tmp_root/no-op-mutant-n2-state" OPEN
+  no_op_transport=$transport
+  [ "$no_op_rc" -ne 0 ] ||
+    fail 'CHECK-NO-OP-MUTANT survived: reverting the fix kept night 2 green'
+  grep -Fq 'unchanged-head' "$no_op_stderr" ||
+    fail "guard mutant reddened night 2 for the wrong reason: $(tr '\n' ' ' <"$no_op_stderr")"
+  printf 'CHECK-NO-OP-MUTANT killed night2_exit=%s\n' "$no_op_rc"
+
+  # ROW B — the asymmetry control, executed on its own two nights. Night 1
+  # really fails (resolver unreachable) after claiming the attempt; night 2,
+  # same sha and head, must still be red with the unchanged-head fingerprint
+  # and must reach no business effect.
+  comments="$tmp_root/no-op-comments-red"
+  : >"$comments"
+  no_op_night no-op-red-n1 "$comments" "$day_red_1" "$tmp_root/no-op-red-n1-state" OPEN network
+  [ "$no_op_rc" -ne 0 ] || fail 'asymmetry night 1 unexpectedly succeeded'
+  grep -Fq -- 'outcome=FAILED' "$comments" ||
+    fail 'asymmetry night 1 published no failed receipt'
+  [ "$(receipt_field stage)" = bootstrap-proposal ] ||
+    fail "asymmetry night 1 failed at an unexpected stage: stage=$(receipt_field stage) error=$(receipt_field error): $(tr '\n' ' ' <"$no_op_stderr" | tail -c 240)"
+  grep -Fq -- "- upstream_sha=$observed" "$comments" &&
+    grep -Fq -- "- workflow_head=$workflow_head" "$comments" ||
+    fail 'asymmetry night 1 failed receipt lost its attempt identity'
+  no_op_night no-op-red-n2 "$comments" "$day_red_2" "$tmp_root/no-op-red-n2-state" OPEN
+  [ "$no_op_rc" -ne 0 ] ||
+    fail 'CHECK-NO-OP-AFTER-RED-STAYS-RED violated: night 2 after a real failure went green'
+  grep -Fq 'unchanged-head' "$no_op_stderr" ||
+    fail "asymmetry night 2 reddened for the wrong reason: $(tr '\n' ' ' <"$no_op_stderr")"
+  if grep -Eq 'pr create|workflow run|repo clone' "$no_op_effects"; then
+    fail 'asymmetry night 2 reached a business effect before being refused'
+  fi
+  printf 'CHECK-NO-OP-AFTER-RED-STAYS-RED night1=FAILED night2_exit=%s refusal=unchanged-head\n' "$no_op_rc"
+
+  # EXTENT — every exit-0 outcome discovered in the controller source gets a
+  # driven two-night sequence; the covered set must equal the discovered set.
+  comments="$tmp_root/no-op-comments-changed"
+  : >"$comments"
+  no_op_night no-op-changed-n1 "$comments" "$day_changed_1" "$tmp_root/no-op-changed-n1-state" MERGED
+  [ "$no_op_rc" -eq 0 ] ||
+    fail "CHANGED night 1 did not complete green: $(tr '\n' ' ' <"$no_op_stderr")"
+  grep -Fq -- '- outcome=CHANGED' "$comments" ||
+    fail 'CHANGED night 1 did not record CHANGED'
+  grep -Fq "last-success sha=$observed" "$comments" ||
+    fail 'CHANGED night recorded no success sha'
+  covered+=(CHANGED)
+  no_op_night no-op-changed-n2 "$comments" "$day_changed_2" "$tmp_root/no-op-changed-n2-state" MERGED
+  [ "$no_op_rc" -eq 0 ] ||
+    fail "night after CHANGED died: $(tr '\n' ' ' <"$no_op_stderr")"
+  [ "$(grep -c -- '- outcome=UNCHANGED' "$comments")" -eq 1 ] ||
+    fail 'night after CHANGED did not no-op through the recorded success sha'
+  covered+=(UNCHANGED)
+  comments="$tmp_root/no-op-comments-unchanged"
+  printf '<!-- daily-amaru last-success sha=%s -->\n' "$observed" >"$comments"
+  no_op_night no-op-unchanged-n1 "$comments" "$day_unchanged_1" "$tmp_root/no-op-unchanged-n1-state" MERGED
+  [ "$no_op_rc" -eq 0 ] ||
+    fail "UNCHANGED night 1 died: $(tr '\n' ' ' <"$no_op_stderr")"
+  grep -Fq -- '- outcome=UNCHANGED' "$comments" ||
+    fail 'seeded-success night 1 was not UNCHANGED'
+  no_op_night no-op-unchanged-n2 "$comments" "$day_unchanged_2" "$tmp_root/no-op-unchanged-n2-state" MERGED
+  [ "$no_op_rc" -eq 0 ] ||
+    fail "UNCHANGED night 2 was not a green no-op: $(tr '\n' ' ' <"$no_op_stderr")"
+  [ "$(grep -c -- '- outcome=UNCHANGED' "$comments")" -eq 2 ] ||
+    fail 'UNCHANGED night 2 did not repeat the no-op'
+  covered+=(UNCHANGED)
+  discovered=$(grep -oE 'write_receipt complete [A-Z]+' "$controller" |
+    awk '{print $3}' | sort -u | paste -sd, -)
+  [ -n "$discovered" ] || fail 'extent discovery found no exit-0 outcomes in the controller'
+  csv=$(printf '%s\n' "${covered[@]}" | sort -u | paste -sd, -)
+  [ "$csv" = "$discovered" ] ||
+    fail "no-op extent mismatch: source declares [$discovered], proof covers [$csv]"
+  printf 'CHECK-NO-OP-EXTENT covered=%s\n' "$csv"
+}
+
 assert_guard_diagnostics() {
   local root="$tmp_root/guard-diagnostics" mutant log
   local census_call marker_call census_after census_missing marker_after marker_missing
@@ -1376,6 +1557,7 @@ case "$scenario" in
     assert_boundary_marker_derivation
     assert_boundary_census_derivation
     assert_guard_diagnostics
+    assert_unchanged_head_no_op
     assert_atomic_peer_snapshot
     # shellcheck disable=SC1091
     . "$fixture_root/check-observation.sh"
@@ -1403,6 +1585,9 @@ case "$scenario" in
     ;;
   guard-census-derivation)
     assert_boundary_census_derivation
+    ;;
+  unchanged-head-no-op)
+    assert_unchanged_head_no_op
     ;;
   guard-marker-derivation)
     assert_boundary_marker_derivation
