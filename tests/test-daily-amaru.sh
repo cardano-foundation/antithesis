@@ -182,6 +182,19 @@ run_case() {
     printf '<!-- daily-amaru attempted-sha=1111111111111111111111111111111111111111 head=%s -->\n' \
       "$default_workflow_head" >"$case_state/markers"
   fi
+  if [ "$case_name" = same-sha-retry-succeeded ]; then
+    # A prior night already completed at this exact sha and head: its receipt
+    # stands in the durable record, and the guard must let the night proceed.
+    printf '<!-- daily-amaru attempted-sha=1111111111111111111111111111111111111111 head=%s -->\n' \
+      "$default_workflow_head" >"$case_state/markers"
+    printf '%s\n' '--- receipt ---' \
+      'day=2026-07-31' \
+      'stage=complete' \
+      'outcome=AWAITING' \
+      "workflow_head=$default_workflow_head" \
+      'upstream_sha=1111111111111111111111111111111111111111' \
+      'run_outcome=awaiting-integration' >>"$case_state/receipt-history"
+  fi
 
   case "$head_source" in
     daily:*) head_env=(DAILY_AMARU_HEAD="${head_source#daily:}") ;;
@@ -772,6 +785,21 @@ assert_no_launch
 assert_honest_failure_receipt launch-attempt
 assert_file_contains "$case_receipt" 'error=unchanged-head'
 pass same-sha-retry
+
+# A completed receipt naming the earlier attempt at the same sha and head
+# makes the night a recorded no-op: the guard must not refuse it, and the
+# night continues through integration to its launch.
+run_case same-sha-retry-succeeded
+require_success
+assert_file_contains "$case_state/markers" \
+  "<!-- daily-amaru attempted-sha=1111111111111111111111111111111111111111 head=$default_workflow_head -->"
+assert_log_count 1 '^claim-sha-attempt '
+assert_file_lacks "$case_stderr" 'unchanged-head'
+assert_log_count 1 '^fake-launch '
+assert_log_count 0 '^real-launch '
+assert_file_contains "$case_receipt" 'outcome=CHANGED'
+assert_file_lacks "$case_receipt" 'claim_supersedes'
+pass same-sha-retry-succeeded
 
 run_case failed-stage
 require_failure
@@ -1794,11 +1822,13 @@ claim_verdict_table_holds() {
     'day|none|CLAIMED|0'
     'day|legacy|SUPERSEDED previous-head=legacy|0'
     'day|same|BLOCKED unchanged-head|1'
+    'day|same-succeeded|SUPERSEDED previous-head=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|0'
     'day|changed|SUPERSEDED previous-head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|0'
     'day|launched|BLOCKED launch-consumed|1'
     'sha|none|CLAIMED|0'
     'sha|legacy|SUPERSEDED previous-head=legacy|0'
     'sha|same|BLOCKED unchanged-head|1'
+    'sha|same-succeeded|SUPERSEDED previous-head=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|0'
     'sha|changed|SUPERSEDED previous-head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|0'
     'launch|none|CLAIMED|0'
     'launch|launched|BLOCKED launch-consumed|1'
@@ -1844,6 +1874,28 @@ claim_verdict_table_holds() {
         ;;
       same)
         printf '%s\n' "${marker%"$new_head" -->}$new_head -->" >"$store"
+        ;;
+      same-succeeded)
+        printf '%s\n' "${marker%"$new_head" -->}$new_head -->" >"$store"
+        # The standing attempt completed: its receipt names the same value and
+        # head, so the guard reads a success where `same` reads a refusal.
+        if [ "$backend" = production ]; then
+          printf '%s\n' '<!-- daily-amaru receipt -->' \
+            '- day=2026-08-21' \
+            '- stage=complete' \
+            '- outcome=AWAITING' \
+            "- workflow_head=$new_head" \
+            '- upstream_sha=1111111111111111111111111111111111111111' \
+            '- run_outcome=awaiting-integration' >>"$store"
+        else
+          printf '%s\n' '--- receipt ---' \
+            'day=2026-08-21' \
+            'stage=complete' \
+            'outcome=AWAITING' \
+            "workflow_head=$new_head" \
+            'upstream_sha=1111111111111111111111111111111111111111' \
+            'run_outcome=awaiting-integration' >>"$root/state/receipt-history"
+        fi
         ;;
       changed)
         printf '%s\n' "${marker%"$new_head" -->}$old_head -->" >"$store"

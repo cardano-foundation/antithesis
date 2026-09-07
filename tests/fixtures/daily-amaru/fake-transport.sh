@@ -50,6 +50,41 @@ validate_head() {
   }
 }
 
+# Mirror of the production unchanged-head guard's receipt read: an earlier
+# attempt at the same value and head stands as a success only if a completed
+# receipt names it (the fake records every published receipt in
+# receipt-history; failures never carry stage=complete).
+attempt_completed() {
+  local kind=$1 value=$2 attempt_head=$3 key_field key_prefix
+  case "$kind" in
+    day) key_field=day ;;
+    sha) key_field=upstream_sha ;;
+    *) return 1 ;;
+  esac
+  key_prefix="$key_field="
+  awk -v key_prefix="$key_prefix" -v key_value="$value" \
+    -v attempt_head="$attempt_head" '
+    function flush_receipt() {
+      if (in_receipt && stage == "complete" &&
+          workflow_head == attempt_head && key == key_value) {
+        found = 1
+      }
+    }
+    $0 == "--- receipt ---" {
+      flush_receipt()
+      in_receipt = 1
+      stage = workflow_head = key = ""
+      next
+    }
+    in_receipt && $0 ~ /^stage=/ { stage = substr($0, 7) }
+    in_receipt && $0 ~ /^workflow_head=/ { workflow_head = substr($0, 15) }
+    in_receipt && index($0, key_prefix) == 1 {
+      key = substr($0, length(key_prefix) + 1)
+    }
+    END { flush_receipt(); exit found ? 0 : 1 }
+  ' "$receipt_history"
+}
+
 claim_prelaunch_marker() {
   local kind=$1 value=$2 head=$3 line marker legacy_marker current_prefix
   local previous_head='' recorded_head='' found=0
@@ -85,7 +120,8 @@ claim_prelaunch_marker() {
       [[ "$recorded_head" =~ ^[0-9a-f]{40}$ ]] || continue
       found=1
       previous_head=$recorded_head
-      if [ "$recorded_head" = "$head" ]; then
+      if [ "$recorded_head" = "$head" ] &&
+        ! attempt_completed "$kind" "$value" "$head"; then
         printf 'BLOCKED unchanged-head\n'
         return 1
       fi

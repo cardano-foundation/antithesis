@@ -86,6 +86,61 @@ validate_head() {
   [[ "$1" =~ ^[0-9a-f]{40}$ ]] || die "invalid workflow head: $1"
 }
 
+# Did the attempt recorded by this exact marker complete successfully? The
+# census already fetched for the markers answers from the receipts it carries:
+# `stage=complete` is published by every exit-0 controller path and by nothing
+# else — failures publish `outcome=FAILED` under their own stage — so the
+# completed stage, not any single outcome name, is the success predicate. A
+# fourth exit-0 outcome added tomorrow is covered by this census without
+# touching it. Both the value and the head must match the marker exactly: a
+# receipt from another attempt must never stand in for this one.
+attempt_completed() {
+  local kind=$1 value=$2 attempt_head=$3 census_text=$4
+  local key_field key_prefix
+  case "$kind" in
+    day) key_field=day ;;
+    sha) key_field=upstream_sha ;;
+    *)
+      printf 'daily-amaru-github: unknown pre-launch claim kind: %s\n' "$kind" >&2
+      return 1
+      ;;
+  esac
+  key_prefix="- $key_field="
+  awk -v key_prefix="$key_prefix" -v key_value="$value" \
+    -v attempt_head="$attempt_head" '
+    function flush_receipt() {
+      if (in_receipt && stage == "complete" &&
+          workflow_head == attempt_head && key == key_value) {
+        found = 1
+      }
+    }
+    $0 == "<!-- daily-amaru receipt -->" {
+      flush_receipt()
+      in_receipt = 1
+      stage = workflow_head = key = ""
+      next
+    }
+    in_receipt && /^<!-- / {
+      flush_receipt()
+      in_receipt = 0
+      next
+    }
+    in_receipt && /^- stage=/ {
+      stage = substr($0, 9)
+      next
+    }
+    in_receipt && /^- workflow_head=/ {
+      workflow_head = substr($0, 17)
+      next
+    }
+    in_receipt && index($0, key_prefix) == 1 {
+      key = substr($0, length(key_prefix) + 1)
+      next
+    }
+    END { flush_receipt(); exit found ? 0 : 1 }
+  ' <<<"$census_text"
+}
+
 # Claim an append-only pre-launch marker. A successful census is captured
 # before it is searched, so a failed `gh` cannot masquerade as no match.
 claim_prelaunch_marker() {
@@ -126,15 +181,26 @@ claim_prelaunch_marker() {
       found=1
       previous_head=$recorded_head
       if [ "$recorded_head" = "$head" ]; then # unchanged-head-guard
-        # The verdict stays the machine-readable token `claim_operation`
-        # parses; why the nightly declined to act belongs beside it in the
-        # log. Runs 33292550661 and 33357412134 were red for two days on the
-        # bare token alone, which names neither input nor the earlier attempt
-        # this one would have repeated.
-        printf 'daily-amaru-github: declining to repeat an attempt: %s=%s was already claimed at controller head %s and neither has moved since; the outcome of that earlier attempt still stands\n' \
+        if ! attempt_completed "$kind" "$value" "$head" "$census"; then
+          # The census is the record this message always claimed to be
+          # reading: with no completed receipt naming this exact attempt, the
+          # standing outcome is the earlier failure, or an attempt that never
+          # completed — and repeating it would only reproduce it. Runs
+          # 33292550661 and 33357412134 were red for two days on the bare
+          # token alone, which names neither input nor the earlier attempt
+          # this one would have repeated.
+          printf 'daily-amaru-github: declining to repeat an attempt: %s=%s was already claimed at controller head %s and neither has moved since; the outcome of that earlier attempt still stands\n' \
+            "$kind" "$value" "$head" >&2
+          emit 'BLOCKED unchanged-head'
+          return 1
+        fi
+        # A completed receipt names this exact attempt: its outcome stands
+        # and it is a success, so re-entering tonight is a deliberate no-op
+        # on the record — never an unnamed failure. The night continues from
+        # the SUPERSEDED verdict below; AWAITING re-enters the supervised
+        # integration it is still entitled to, up to its own staleness alarm.
+        printf 'daily-amaru-github: attempt %s=%s at controller head %s already completed successfully; continuing as a recorded no-op\n' \
           "$kind" "$value" "$head" >&2
-        emit 'BLOCKED unchanged-head'
-        return 1
       fi
     fi
   done <<<"$census"
