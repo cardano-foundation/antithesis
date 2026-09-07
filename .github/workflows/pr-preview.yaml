@@ -33,6 +33,7 @@ jobs:
         env:
           SURGE_TOKEN: ${{ secrets.SURGE_TOKEN }}
         run: |
+          set -euo pipefail
           if [ -z "${SURGE_TOKEN}" ]; then
             echo "::error::SURGE_TOKEN secret is not set on the repo." \
               "Generate one with 'nix shell nixpkgs#nodePackages.surge" \
@@ -44,6 +45,13 @@ jobs:
           mkdir -p surge-site
           cp -RL site/. surge-site/
           chmod -R u+w surge-site
+          # The site needs a sentinel file we can curl after deploy
+          # to verify the upload actually landed. surge.cli has been
+          # observed to exit 0 after an ECONNRESET mid-upload (see
+          # PR #88's run 25163645110), claiming the subdomain but
+          # leaving an empty deployment that returns 404.
+          SENTINEL="$(uuidgen).txt"
+          printf '%s' "${{ github.sha }}" > "surge-site/${SENTINEL}"
           # Compose the subdomain. cardano-foundation +
           # cardano-node-antithesis is long, so use a short
           # repo alias to stay under the 63-char DNS label
@@ -52,11 +60,50 @@ jobs:
           # Pin nixpkgs to nixos-25.05 because nodePackages was
           # removed from nixpkgs-unstable on 2026-03-03; the
           # 25.05 channel still ships surge 0.23.1.
-          nix shell github:NixOS/nixpkgs/nixos-25.05#nodePackages.surge \
-            -c surge \
-            surge-site \
-            "${DOMAIN}" \
-            --token "${SURGE_TOKEN}"
+          SURGE_BIN="$(
+            nix build --no-link --print-out-paths \
+              github:NixOS/nixpkgs/nixos-25.05#nodePackages.surge
+          )/bin/surge"
+          attempt=0
+          max_attempts=3
+          deploy_ok=
+          while [ "${attempt}" -lt "${max_attempts}" ]; do
+            attempt=$((attempt + 1))
+            echo "::group::surge upload (attempt ${attempt}/${max_attempts})"
+            if "${SURGE_BIN}" \
+                surge-site \
+                "${DOMAIN}" \
+                --token "${SURGE_TOKEN}"; then
+              echo "surge exited 0; verifying upload via sentinel"
+              # surge returning 0 is necessary but not sufficient
+              # — verify by fetching the sentinel.
+              sleep 5
+              http_status="$(
+                curl -sS -o /dev/null \
+                  -w '%{http_code}' \
+                  "https://${DOMAIN}/${SENTINEL}" || echo 000
+              )"
+              if [ "${http_status}" = "200" ]; then
+                echo "sentinel reachable, deploy verified"
+                deploy_ok=1
+                echo "::endgroup::"
+                break
+              else
+                echo "::warning::sentinel returned ${http_status}," \
+                  "treating deploy as failed"
+              fi
+            else
+              echo "::warning::surge exited non-zero on attempt" \
+                "${attempt}"
+            fi
+            echo "::endgroup::"
+            sleep $((attempt * 5))
+          done
+          if [ -z "${deploy_ok}" ]; then
+            echo "::error::surge deploy failed after" \
+              "${max_attempts} attempts"
+            exit 1
+          fi
           echo "PREVIEW_URL=https://${DOMAIN}" >> "$GITHUB_ENV"
 
       - name: Upsert preview comment on PR
