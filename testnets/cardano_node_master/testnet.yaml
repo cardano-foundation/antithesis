@@ -110,10 +110,6 @@ TraceOptions:
     severity: Info
   Net.ConnectionManager.Remote.ConnectionManagerCounters:
     severity: Silence
-  Net.ErrorPolicy:
-    severity: Info
-  Net.ErrorPolicy.Local:
-    severity: Info
   Net.InboundGovernor:
     severity: Warning
   Net.InboundGovernor.Remote:
@@ -123,10 +119,6 @@ TraceOptions:
   Net.PeerSelection:
     severity: Silence
   Net.PeerSelection.Actions:
-    severity: Info
-  Net.Subscription.DNS:
-    severity: Info
-  Net.Subscription.IP:
     severity: Info
   Resources:
     severity: Silence

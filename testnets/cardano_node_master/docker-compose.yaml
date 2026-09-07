@@ -1,5 +1,7 @@
 x-cardano-node: &cardano-node
-  image: ghcr.io/intersectmbo/cardano-node@sha256:5ae211f92eac18ed27b9e2f73c190b56bf4c1a7145d282e78ca58597a385d19f
+  # p1 — bumped from 10.5.3 to 10.6.4; 10.5.x was the only version still
+  # accepting the legacy Net.ErrorPolicy/Net.Subscription.* trace namespaces.
+  image: ghcr.io/intersectmbo/cardano-node@sha256:f29c5a48475df1e1804fc7270cf1dc02a38f2d8f659f35781a73e38254fa9a5f
   environment:
     CARDANO_BLOCK_PRODUCER: true
   command: >
@@ -134,6 +136,17 @@ services:
       - p1-configs:/configs:ro
       - ./relay-topology.json:/configs/configs/topology.json:ro
       - relay3-state:/state
+      - tracer:/tracer
+
+  relay4:
+    <<: *cardano-relay
+    image: ghcr.io/intersectmbo/cardano-node@sha256:f29c5a48475df1e1804fc7270cf1dc02a38f2d8f659f35781a73e38254fa9a5f
+    container_name: relay4
+    hostname: relay4.example
+    volumes:
+      - p1-configs:/configs:ro
+      - ./relay-topology.json:/configs/configs/topology.json:ro
+      - relay4-state:/state
       - tracer:/tracer
 
   # Tx-generator workload — promoted from cardano_node_tx_generator
@@ -274,6 +287,7 @@ volumes:
   relay1-state:
   relay2-state:
   relay3-state:
+  relay4-state:
   utxo-keys:
   asteria-game-db:
   asteria-deploy:
