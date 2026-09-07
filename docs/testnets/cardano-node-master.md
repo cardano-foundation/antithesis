@@ -16,7 +16,8 @@ This testnet exercises the node-to-node protocol across multiple cardano-node ve
 | **configurator** | Generates genesis files, node configs, and signing keys at startup |
 | **tracer** | cardano-tracer daemon collecting structured logs from all nodes |
 | **tracer-sidecar** | Processes tracer logs into Antithesis assertions (chain convergence, error detection) |
-| **sidecar** | Network health checks, the Antithesis setup signal, and the host of the chain-sync `adversary` driver (see [Adversary](../components/adversary.md)). |
+| **sidecar** | Network health checks and the Antithesis setup signal. |
+| **adversary** | Sleep-forever host for the chain-sync adversary CLI; Antithesis composer execs its driver per tick to churn N2N clients against producers and relays. See [Adversary](../components/adversary.md). |
 | **log-tailer** | Streams the per-pool node logs into Antithesis's log explorer for offline triage. |
 | **asteria-game** | Single container that hosts the long-lived utxo-indexer plus three short-lived binaries (`asteria-bootstrap`, `asteria-game`, `asteria-invariant`) fired by composer scripts. See [Why asteria-game is here](#why-asteria-game-is-here) below and [Asteria Game](../components/asteria-player.md). |
 | **tx-generator** | Long-running daemon that submits well-formed ADA transfers through relay1's N2C socket. Composer drivers fire deterministic `transact`, `refill`, `eventually`, and `finally` control-socket probes. See [Why tx-generator is here](#why-tx-generator-is-here) below and [Tx-generator](../components/tx-generator.md). |

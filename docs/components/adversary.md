@@ -133,14 +133,17 @@ delete the two `relay*.example` lines. To attack only one node,
 delete the others. The list lives next to the network magic and the
 port — one place describes the attack target.
 
-## Wiring on `cardano_node_adversary`
+## Wiring on master and `cardano_node_adversary`
 
-The adversary runs as its own service in
-[`testnets/cardano_node_adversary/docker-compose.yaml`][compose]:
+The adversary runs as its own service in the main
+[`testnets/cardano_node_master/docker-compose.yaml`][master-compose]
+profile and in the separate
+[`testnets/cardano_node_adversary/docker-compose.yaml`][adversary-compose]
+validation profile:
 
 ```yaml
 adversary:
-  image: ghcr.io/cardano-foundation/cardano-node-antithesis/adversary:69f49c5
+  image: ghcr.io/cardano-foundation/cardano-node-antithesis/adversary:5173fa8
   hostname: adversary.example
   volumes:
     - tracer:/tracer:ro       # tracer-sidecar writes chainPoints.log here
@@ -156,6 +159,15 @@ No `command:` override — the image's `EntryPoint` is `tail -f
 /dev/null`. No socket volume. No shared state with anyone else. The
 only mount is `tracer:/tracer:ro` so the binary can read
 `/tracer/chainPoints.log`.
+
+Promotion to master followed a faults-enabled 1h Antithesis validation
+run of `cardano_node_adversary` on commit `290a8ed3`. That validation
+profile contained the same `tx-generator`, `asteria-game`, and
+`adversary` workload mix now used by master. Master also uses the
+validated tracer-sidecar pin that emits the cluster fork-depth
+checklist; that telemetry is independent of proving the adversary
+appears as a peer and is the critical signal for measuring perturbation
+weight.
 
 ## Build the image
 
@@ -281,7 +293,8 @@ the daemon's home repo: [`cardano-node-clients` PR #122][pr-122].
 
 [adv-comp]: https://github.com/cardano-foundation/cardano-node-antithesis/tree/main/components/adversary
 [driver]: https://github.com/cardano-foundation/cardano-node-antithesis/blob/main/components/adversary/composer/chain-sync-client/parallel_driver_flap.sh
-[compose]: https://github.com/cardano-foundation/cardano-node-antithesis/blob/main/testnets/cardano_node_adversary/docker-compose.yaml
+[master-compose]: https://github.com/cardano-foundation/cardano-node-antithesis/blob/main/testnets/cardano_node_master/docker-compose.yaml
+[adversary-compose]: https://github.com/cardano-foundation/cardano-node-antithesis/blob/main/testnets/cardano_node_adversary/docker-compose.yaml
 [publish-images]: https://github.com/cardano-foundation/cardano-node-antithesis/blob/main/.github/workflows/publish-images.yaml
 [pr-110]: https://github.com/cardano-foundation/cardano-node-antithesis/pull/110
 [pr-122]: https://github.com/lambdasistemi/cardano-node-clients/pull/122

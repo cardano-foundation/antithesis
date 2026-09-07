@@ -193,8 +193,30 @@ services:
     tmpfs:
       - /tmp
 
+  # Sleep-forever container holding the cardano-adversary CLI plus
+  # its driver scripts under /opt/antithesis/test/v1/. Antithesis
+  # composer `docker exec`s into here per tick to fire one
+  # initiator-only chain-sync session against a randomly-chosen
+  # target node (any of p1/p2/p3/relay1/relay2). The container
+  # itself never receives the request and holds no shared state —
+  # if Antithesis chaos kills it, restart: always brings back an
+  # idempotent host.
+  adversary:
+    image: ghcr.io/cardano-foundation/cardano-node-antithesis/adversary:5173fa8
+    container_name: adversary
+    hostname: adversary.example
+    volumes:
+      # Read-only — tracer-sidecar writes chainPoints.log here.
+      - tracer:/tracer:ro
+    depends_on:
+      tracer-sidecar:
+        condition: service_started
+      configurator:
+        condition: service_completed_successfully
+    restart: always
+
   tracer-sidecar:
-    image: ghcr.io/cardano-foundation/cardano-node-antithesis/tracer-sidecar:5271661
+    image: ghcr.io/cardano-foundation/cardano-node-antithesis/tracer-sidecar:8dbf509
     container_name: tracer-sidecar
     hostname: tracer-sidecar.example
     labels:
