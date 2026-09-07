@@ -1,0 +1,3 @@
+Outcome: once per UTC day, if pragma-org/amaru main changed — automatic bump → image → repin → 1h fault-injection run, no human in loop; harness provably covers current main's interface or ALARMS (never vacuously green); honest per-property reports; a missing run is itself a loud red; every new red becomes an OPERATOR-READY evidence packet within 24h — all external publishing and human relations are the operator's alone; declared reds never silently suppressed. (Ratified 2026-07-31; amended by operator 2026-08-06.) MILESTONE-COMPLETE after a 7-consecutive-day unattended streak, by outcome audit. Deployment beyond this host is outside the milestone.
+
+Live state: https://github.com/cardano-foundation/cardano-node-antithesis/wiki/M2-State
