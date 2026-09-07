@@ -12,6 +12,11 @@ declare -g case_root bin effects receipt stdout stderr
 
 obs_start=1000000
 obs_candidate=$workflow_head
+# The absolute observation ceiling is fixture-owned (seconds) so the wait
+# extension past the history-derived window is observable in a test runtime.
+# Production's shipped default is a separate claim about
+# lambdasistemi/amaru-bootstrap and is never used here.
+obs_ceiling_default=8
 
 write_observation_time_tools() {
   local dest=$1
@@ -40,6 +45,7 @@ EOF
 setup_obs() {
   local label=$1
   prepare_case "$label"
+  obs_ceiling=$obs_ceiling_default
   obs_root=$case_root/obs
   mkdir -p "$obs_root/polls"
   printf '0\n' >"$obs_root/poll"
@@ -196,6 +202,7 @@ run_obs() {
   local extra_transport=${1:-$transport}
   transport_rc=0
   DAILY_AMARU_DAY=$day \
+    DAILY_AMARU_BOOTSTRAP_CHECK_MAX_SECONDS=$obs_ceiling \
     DAILY_AMARU_BOOTSTRAP_CHECK_WORKFLOW=$obs_workflow \
     DAILY_AMARU_BOOTSTRAP_CHECKS=$obs_checks \
     DAILY_AMARU_IDENTITY=boundary-bootstrap-token \
@@ -367,6 +374,9 @@ reject_sleep_after_terminal_failure() {
 run_check_observation_proof() {
   local pending_success_polls=0 pending_failure_polls=0 absent_polls=0
   local duration_variants=0 slept_short=0 slept_long=0
+  local absent_polls_long=0 no_history_polls=0 pending_past_window_polls=0
+  local pending_past_window_mutant=pending still_running_polls=0
+  local still_running_mutant=pending
   local failed_named=0 never_reported_named=0 transport_exhausted_named=0
   local transient_errors=0 persistent_errors=0 recovered=0
   local wrong_head_rejected=0 duplicate_rejected=0 partial_retried=0
@@ -439,6 +449,57 @@ run_check_observation_proof() {
   failed_named=1
   assert_no_real_effects
 
+  # S-OBS-01, this morning's exact shape (nightly 33837021124): a required
+  # check in_progress past the history-derived window that later concludes
+  # success. The history window permits only three polls at this cadence; the
+  # observer must keep watching and reach the real conclusion, and the
+  # executing check must never be named never-reported.
+  setup_obs pending-past-window
+  write_duration_seconds 4
+  write_all_pending 1
+  write_all_pending 2
+  write_all_pending 3
+  write_all_success 4
+  run_obs
+  [ "$transport_rc" -eq 0 ] ||
+    fail "pending past history window did not extend the wait: $(tr '\n' ' ' <"$stderr")"
+  expected_success_rows >"$case_root/expected"
+  cmp -s "$case_root/expected" "$stdout" ||
+    fail 'pending-past-window emitted non-exact success rows'
+  grep -Fq 'never-reported' "$stderr" &&
+    fail 'executing check was declared never-reported'
+  grep -Fq 'still-running' "$stderr" &&
+    fail 'check that concluded success was named still-running'
+  pending_past_window_polls=$(count_head_polls)
+  [ "$pending_past_window_polls" -ge 4 ] ||
+    fail "pending-past-window polls=$pending_past_window_polls, want >=4 (the history window permits only 3)"
+  [ "$(cat "$clock")" -gt $((obs_start + 4)) ] ||
+    fail 'observation did not keep watching past the history-derived duration'
+  assert_no_real_effects
+
+  # S-OBS-01 state 3: a required check still executing at the absolute
+  # ceiling is a named terminal state that accuses the ceiling (loudly enough
+  # to be fixed in one night), never the check and never never-reported.
+  setup_obs pending-to-ceiling
+  write_duration_seconds 4
+  write_all_pending 1
+  write_all_pending 2
+  write_all_pending 3
+  write_all_pending 4
+  write_all_pending 5
+  run_obs
+  [ "$transport_rc" -ne 0 ] ||
+    fail 'check executing at the ceiling proceeded'
+  grep -Eq "bootstrap check still-running on $obs_candidate: Build polls=[0-9]+ observed=Bootstrap CI/Build,[^:]+ ceiling=$obs_ceiling:" \
+    "$stderr" ||
+    fail "still-running terminal lacked the named diagnostic: $(tr '\n' ' ' <"$stderr")"
+  grep -Fq 'never-reported' "$stderr" &&
+    fail 'executing check at the ceiling was named never-reported'
+  still_running_polls=$(count_head_polls)
+  [ "$still_running_polls" -ge 5 ] ||
+    fail "pending-to-ceiling polls=$still_running_polls, want >=5"
+  assert_no_real_effects
+
   setup_obs absent-short
   write_duration_seconds 4
   write_poll_empty 1
@@ -454,8 +515,8 @@ run_check_observation_proof() {
   absent_polls=$(count_head_polls)
   [ "$absent_polls" -ge 2 ] || fail "absent polls=$absent_polls, want >=2"
   slept_short=$(slept_total)
-  [ "$slept_short" -eq 4 ] ||
-    fail "4s duration slept=$slept_short, want 4"
+  [ "$slept_short" -eq "$obs_ceiling" ] ||
+    fail "4s history slept=$slept_short, want the absolute ceiling $obs_ceiling"
   never_reported_named=1
   assert_no_real_effects
 
@@ -471,11 +532,37 @@ run_check_observation_proof() {
   grep -Fq 'never-reported' "$stderr" ||
     fail 'long absence lacked never-reported'
   slept_long=$(slept_total)
-  [ "$slept_long" -eq 10 ] ||
-    fail "10s duration slept=$slept_long, want 10"
-  [ "$slept_short" -ne "$slept_long" ] ||
-    fail 'observation window ignored injected duration evidence'
+  [ "$slept_long" -eq "$obs_ceiling" ] ||
+    fail "10s history slept=$slept_long, want the absolute ceiling $obs_ceiling"
+  [ "$slept_short" -eq "$slept_long" ] ||
+    fail 'history evidence moved the observation window'
+  absent_polls_long=$(count_head_polls)
+  [ "$absent_polls_long" -ge 2 ] ||
+    fail "absent-long polls=$absent_polls_long, want >=2"
+  [ "$absent_polls_long" -ne "$absent_polls" ] ||
+    fail 'observation cadence ignored injected duration evidence'
   duration_variants=2
+  assert_no_real_effects
+
+  # S-OBS-01: with no completed-run history at all the observation must not
+  # abort for lack of cadence evidence; the wait is still the absolute
+  # ceiling and the absence is still named never-reported.
+  setup_obs absent-no-history
+  write_poll_empty 1
+  write_poll_empty 2
+  run_obs
+  [ "$transport_rc" -ne 0 ] ||
+    fail 'observation with no duration history aborted early'
+  grep -Eq 'bootstrap check never-reported on '"$obs_candidate"': Build polls=[0-9]+' \
+    "$stderr" ||
+    fail "no-history absence lacked never-reported: $(tr '\n' ' ' <"$stderr")"
+  grep -Fq 'duration evidence is unusable' "$stderr" &&
+    fail 'missing history was fatal to the observation'
+  no_history_polls=$(count_head_polls)
+  [ "$no_history_polls" -ge 2 ] ||
+    fail "no-history polls=$no_history_polls, want >=2"
+  [ "$(slept_total)" -eq "$obs_ceiling" ] ||
+    fail "no-history window slept=$(slept_total), want the absolute ceiling $obs_ceiling"
   assert_no_real_effects
 
   setup_obs transient
@@ -630,14 +717,86 @@ run_check_observation_proof() {
   assert_no_real_effects
   reject_parse_as_empty_census
 
+  # S-OBS-01 killed mutant: reverting the fix — history-derived deadline and
+  # the collapsed absent/pending terminal — must turn this proof red with the
+  # exact morning defect: the executing check called never-reported at the
+  # history window, never reaching the success it later concluded.
+  mutant=$tmp_root/pending-past-window-history-deadline.sh
+  # shellcheck disable=SC2016 # literal source/replacement lines; must not expand
+  replace_unique_line "$transport" "$mutant" \
+    '      deadline=$((start + window))' \
+    '      deadline=$((start + duration))' \
+    pending-past-window-history-deadline
+  local reverted=$tmp_root/pending-past-window-reverted.sh
+  # shellcheck disable=SC2016 # literal source/replacement lines; must not expand
+  replace_unique_line "$mutant" "$reverted" \
+    '      if [ -n "$first_pending" ]; then' \
+    '      if false; then # mutant: collapsed terminal, still-running disabled' \
+    pending-past-window-collapsed-terminal
+  setup_obs pending-past-window-mutant
+  write_duration_seconds 4
+  write_all_pending 1
+  write_all_pending 2
+  write_all_pending 3
+  write_all_success 4
+  run_obs "$reverted"
+  [ "$transport_rc" -ne 0 ] ||
+    fail 'reverted-fix mutant reached the conclusion the fix exists to reach'
+  grep -Fq 'never-reported' "$stderr" ||
+    fail "reverted-fix mutant did not reproduce the never-reported defect: $(tr '\n' ' ' <"$stderr")"
+  if grep -Fq 'still-running' "$stderr"; then
+    fail 'reverted-fix mutant reported still-running'
+  fi
+  pending_past_window_mutant=killed
+
+  # S-OBS-01 killed mutant for state 3: collapsing the still-running arm back
+  # into absence must turn the ceiling scenario red with the check named
+  # never-reported -- the exact false negative this slice removes.
+  local collapsed=$tmp_root/still-running-collapsed.sh
+  # shellcheck disable=SC2016 # literal source/replacement lines; must not expand
+  replace_unique_line "$transport" "$collapsed" \
+    '      if [ -n "$first_pending" ]; then' \
+    '      if false; then # mutant: still-running terminal collapsed into absence' \
+    still-running-collapsed
+  setup_obs still-running-mutant
+  write_duration_seconds 4
+  write_all_pending 1
+  write_all_pending 2
+  write_all_pending 3
+  write_all_pending 4
+  write_all_pending 5
+  run_obs "$collapsed"
+  [ "$transport_rc" -ne 0 ] ||
+    fail 'collapsed-terminal mutant named the executing check still-running'
+  grep -Fq 'never-reported' "$stderr" ||
+    fail 'collapsed-terminal mutant did not reproduce the never-reported defect'
+  if grep -Fq 'still-running' "$stderr"; then
+    fail 'collapsed-terminal mutant kept the still-running terminal'
+  fi
+  still_running_mutant=killed
+
   [ "$pending_success_polls" -ge 2 ] &&
     [ "$pending_failure_polls" -ge 2 ] &&
     [ "$absent_polls" -ge 2 ] &&
+    [ "$absent_polls_long" -ge 2 ] &&
+    [ "$no_history_polls" -ge 2 ] &&
+    [ "$pending_past_window_polls" -ge 4 ] &&
+    [ "$still_running_polls" -ge 5 ] &&
     [ "$duration_variants" -ge 2 ] ||
     fail 'observation counters were not derived from executed polls'
-  printf 'CHECK-OBSERVATION pending_success_polls=%s pending_failure_polls=%s absent_polls=%s duration_variants=%s\n' \
+  [ "$pending_past_window_mutant" = killed ] ||
+    fail 'pending-past-window proof shipped no killed mutant'
+  [ "$still_running_mutant" = killed ] ||
+    fail 'still-running proof shipped no killed mutant'
+  printf 'CHECK-OBSERVATION pending_success_polls=%s pending_failure_polls=%s absent_polls=%s duration_variants=%s pending_past_window_polls=%s\n' \
     "$pending_success_polls" "$pending_failure_polls" "$absent_polls" \
-    "$duration_variants"
+    "$duration_variants" "$pending_past_window_polls"
+  printf 'CHECK-PENDING-PAST-WINDOW polls=%s ceiling=%s\n' \
+    "$pending_past_window_polls" "$obs_ceiling"
+  printf 'CHECK-PENDING-PAST-WINDOW-MUTANT killed\n'
+  printf 'CHECK-STILL-RUNNING-AT-CEILING polls=%s ceiling=%s\n' \
+    "$still_running_polls" "$obs_ceiling"
+  printf 'CHECK-STILL-RUNNING-MUTANT killed\n'
   printf 'CHECK-TERMINALS failed_named=%s never_reported_named=%s transport_exhausted_named=%s\n' \
     "$failed_named" "$never_reported_named" "$transport_exhausted_named"
   printf 'CHECK-TRANSPORT transient_errors=%s persistent_errors=%s recovered=%s\n' \

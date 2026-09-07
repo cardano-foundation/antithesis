@@ -3,6 +3,9 @@ set -euo pipefail
 
 repo_root=${1:?repository root is required}
 scenario=${2:-all}
+# Bound every real-time observation driven by this shared harness. Explicit
+# scenario values still win, including check-observation's fake-time model.
+export DAILY_AMARU_BOOTSTRAP_CHECK_MAX_SECONDS=${DAILY_AMARU_BOOTSTRAP_CHECK_MAX_SECONDS:-1}
 controller="$repo_root/scripts/daily-amaru.sh"
 transport=${DAILY_AMARU_BOUNDARY_TRANSPORT:-$repo_root/scripts/daily-amaru-github.sh}
 fixture_root="$repo_root/tests/fixtures/daily-amaru"
