@@ -114,14 +114,19 @@ EOF
 }
 
 set_start_time() {
-    # TODO: the rounding is no longer needed
-    SYSTEM_START=$(date -d "@$(( ( $(date +%s) / 120 ) * 120 ))" +%Y-%m-%dT%H:%M:00Z)
+    # Genesis = now (UTC, to the second). Producers forge from genesis; a systemStart
+    # in the past beyond the forecast horizon (3k/f = 75s at k=5) means they boot
+    # already past it -> Forge.Loop.NoLedgerView -> chain dead at genesis. Backdating
+    # to the previous 2-min boundary (up to 120s) was the cause of the flaky
+    # genesis-forge. A forward lead would add startup margin but each second pushes
+    # bootstrap further into the Antithesis setup budget, so keep it at now.
+    SYSTEM_START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     SYSTEM_START_UNIX=$(date -d "${SYSTEM_START}" +%s)
     SHELLEY_GENESIS_JSON="$1/configs/shelley-genesis.json"
     BYRON_GENESIS_JSON="$1/configs/byron-genesis.json"
 
     # Convert unix epoch to ISO time
-    SYSTEM_START_ISO="$(date -d @${SYSTEM_START_UNIX} '+%Y-%m-%dT%H:%M:00Z')"
+    SYSTEM_START_ISO="$(date -u -d @${SYSTEM_START_UNIX} '+%Y-%m-%dT%H:%M:%SZ')"
 
     # .systemStart
     jq ".systemStart = \"${SYSTEM_START_ISO}\"" "${SHELLEY_GENESIS_JSON}" | write_file "${SHELLEY_GENESIS_JSON}"
